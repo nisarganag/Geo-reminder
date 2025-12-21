@@ -325,7 +325,7 @@ export default function HomeScreen() {
                         </View>
 
                         {/* Destination Card */}
-                        <View style={[GLOBAL_STYLES.card, { zIndex: 100 }]}>
+                        <View style={[GLOBAL_STYLES.card, { zIndex: 1000, elevation: 20 }]}>
                             <Text style={localStyles.cardTitle}>Where to?</Text>
 
                             <View style={localStyles.searchContainer}>
@@ -597,13 +597,13 @@ const localStyles = StyleSheet.create({
         right: 0,
         backgroundColor: '#FFFFFF', // Solid background for readability
         borderRadius: 16,
-        zIndex: 5000,
-        maxHeight: 250, // Strict max height
+        zIndex: 9999, // Max z-index
+        maxHeight: 250,
         borderWidth: 1,
         borderColor: 'rgba(0,0,0,0.1)',
         ...SHADOWS,
-        elevation: 10,
-        overflow: 'hidden', // Required for internal scrolling
+        elevation: 100, // Elevation MUST be higher than the cards below it (which are 12)
+        overflow: 'hidden',
     },
     dropdownScroll: {
         maxHeight: 250,
