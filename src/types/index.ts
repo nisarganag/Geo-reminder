@@ -1,0 +1,25 @@
+export interface LocationCoords {
+  latitude: number;
+  longitude: number;
+}
+
+export interface SearchResult {
+  display_name: string;
+  lat: string;
+  lon: string;
+}
+
+export interface RouteInfo {
+  distance: number; // in meters
+  duration: number; // in seconds
+}
+
+export interface ReminderSettings {
+  destination: LocationCoords | null;
+  destinationName: string;
+  distanceThreshold: number; // in meters
+  timeThreshold: number; // in minutes
+  isActive: boolean;
+  soundEnabled: boolean;
+  vibrationEnabled: boolean;
+}
