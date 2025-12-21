@@ -21,7 +21,7 @@ export const RoutingService = {
   ): Promise<RouteInfo | null> => {
     try {
       const response = await fetch(
-        `http://router.project-osrm.org/route/v1/driving/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?overview=false`
+        `https://router.project-osrm.org/route/v1/driving/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?overview=false`
       );
       const data = await response.json();
 
