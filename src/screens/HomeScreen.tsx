@@ -33,22 +33,7 @@ export default function HomeScreen() {
     const globalStyles = getGlobalStyles(colors, isDark);
     const styles = getLocalStyles(colors);
 
-    // Animation for Refresh
-    const spinValue = useRef(new Animated.Value(0)).current;
-    const spin = spinValue.interpolate({
-        inputRange: [0, 1],
-        outputRange: ['0deg', '360deg']
-    });
-
-    const runSpinAnimation = () => {
-        spinValue.setValue(0);
-        Animated.timing(spinValue, {
-            toValue: 1,
-            duration: 1000,
-            easing: Easing.linear,
-            useNativeDriver: true,
-        }).start();
-    };
+    // Removed manual spin animation in favor of ActivityIndicator
 
     const [query, setQuery] = useState('');
     const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
@@ -117,7 +102,7 @@ export default function HomeScreen() {
     }, [query]);
 
     const refreshLocation = async () => {
-        runSpinAnimation();
+        // Animation handled by UI state (currentAddress === 'Updating...')
         setCurrentAddress('Updating...');
         const loc = await LocationService.getCurrentLocation();
         if (loc) {
@@ -364,9 +349,11 @@ export default function HomeScreen() {
                             <View style={styles.locationHeader}>
                                 <Text style={styles.cardTitle}>MY LOCATION</Text>
                                 <TouchableOpacity onPress={refreshLocation} style={styles.refreshButton}>
-                                    <Animated.View style={{ transform: [{ rotate: spin }] }}>
+                                    {currentAddress === 'Updating...' ? (
+                                        <ActivityIndicator size="small" color={colors.primary} />
+                                    ) : (
                                         <Text style={{ fontSize: 18 }}>🔄</Text>
-                                    </Animated.View>
+                                    )}
                                 </TouchableOpacity>
                             </View>
                             <View style={styles.locationRow}>
@@ -619,6 +606,10 @@ const getLocalStyles = (colors: typeof LightColors) => StyleSheet.create({
         padding: 8,
         backgroundColor: colors.inputBg,
         borderRadius: 20,
+        width: 40,
+        height: 40,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     locationRow: {
         flexDirection: 'row',
@@ -656,7 +647,7 @@ const getLocalStyles = (colors: typeof LightColors) => StyleSheet.create({
     },
     dropdown: {
         position: 'absolute',
-        top: 60,
+        top: 70, // Increased to clear input
         left: 0,
         right: 0,
         backgroundColor: colors.card,
@@ -788,11 +779,16 @@ const getLocalStyles = (colors: typeof LightColors) => StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         paddingHorizontal: 4,
+        marginTop: 8,
+        alignItems: 'flex-start',
     },
     metaText: {
         fontSize: 13,
         color: colors.textSecondary,
         fontWeight: '600',
+        flex: 1,
+        flexWrap: 'wrap',
+        textAlign: 'right',
     },
     divider: {
         height: 1,

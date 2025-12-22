@@ -69,7 +69,7 @@ export default function Sidebar({
                             <Text style={[styles.aboutText, { color: colors.text }]}>Geo Reminder</Text>
                             <Text style={[styles.aboutSub, { color: colors.textSecondary }]}>Version 1.0.2</Text>
                             <Text style={[styles.aboutSub, { color: colors.textSecondary, marginTop: 8 }]}>
-                                Made with ❤️ for perfect arrivals.
+                                Made with ❤️ by Nisarga.
                             </Text>
                         </View>
 
