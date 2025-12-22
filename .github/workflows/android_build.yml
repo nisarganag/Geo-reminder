@@ -43,6 +43,15 @@ jobs:
         working-directory: android
         run: ./gradlew clean
 
+      - name: Configure Release Signing (Debug Key)
+        working-directory: android
+        run: |
+          sed -i 's/signingConfig signingConfigs.debug/signingConfig signingConfigs.debug/g' app/build.gradle || true
+          # Should replace default 'signingConfig signingConfigs.debug' if it exists or we can append it?
+          # Actually, standard Expo prebuild might not have signingConfig setup for release.
+          # Let's search for "buildTypes { release {" and inject the line.
+          sed -i 's/buildTypes { release {/buildTypes { release { signingConfig signingConfigs.debug/g' app/build.gradle
+
       - name: Build APK with Gradle
         working-directory: android
         run: ./gradlew assembleRelease --stacktrace --info
