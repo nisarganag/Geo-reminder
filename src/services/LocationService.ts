@@ -8,7 +8,15 @@ export const LocationService = {
 
   getCurrentLocation: async (): Promise<Location.LocationObject | null> => {
     try {
-      return await Location.getCurrentPositionAsync({});
+      // Try to get the last known position first (faster)
+      let location = await Location.getLastKnownPositionAsync({});
+      if (!location) {
+        // If not available, request current position with balanced accuracy (faster than high)
+        location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+      }
+      return location;
     } catch (error) {
       console.error("Error getting location:", error);
       return null;

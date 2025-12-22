@@ -40,6 +40,7 @@ export default function HomeScreen() {
     const [travelMode, setTravelMode] = useState<'driving' | 'aerial'>('driving');
 
     const [isTracking, setIsTracking] = useState(false);
+    const [isStartingTracking, setIsStartingTracking] = useState(false); // Loading state for button
     const [currentLocation, setCurrentLocation] = useState<LocationObject | null>(null);
     const [routeInfo, setRouteInfo] = useState<RouteInfo | null>(null);
     const [statusMessage, setStatusMessage] = useState('Ready to start');
@@ -176,50 +177,61 @@ export default function HomeScreen() {
             return;
         }
 
-        const startLoc = await LocationService.getCurrentLocation();
-        if (!startLoc) {
-            Alert.alert('Error', 'Could not get current location');
-            return;
-        }
+        setIsStartingTracking(true); // Start loading
 
-        const info = await RoutingService.getRouteDetails(startLoc.coords, destination, travelMode);
-        if (info) {
-            const distKm = info.distance / 1000;
-            const timeMin = info.duration / 60;
-            const threshDist = parseFloat(distanceThreshold);
-            const threshTime = parseFloat(timeThreshold);
-
-            // Validation Checks
-            if (distKm < threshDist) {
-                const msg = `You are ${distKm.toFixed(2)}km away, closer than your ${threshDist}km threshold.`;
-                if (Platform.OS === 'web') {
-                    if (window.confirm(`${msg} Start anyway?`)) proceedToTrack(startLoc, info);
-                } else {
-                    Alert.alert('Already Within Range', msg, [
-                        { text: 'Cancel', style: 'cancel' },
-                        { text: 'Start Anyway', onPress: () => proceedToTrack(startLoc, info) }
-                    ]);
-                }
-                return;
-            } else if (timeMin < threshTime) {
-                const msg = `You are ${timeMin.toFixed(0)} mins away, less than your ${threshTime} min threshold.`;
-                if (Platform.OS === 'web') {
-                    if (window.confirm(`${msg} Start anyway?`)) proceedToTrack(startLoc, info);
-                } else {
-                    Alert.alert('Already Within Range', msg, [
-                        { text: 'Cancel', style: 'cancel' },
-                        { text: 'Start Anyway', onPress: () => proceedToTrack(startLoc, info) }
-                    ]);
-                }
+        try {
+            const startLoc = await LocationService.getCurrentLocation();
+            if (!startLoc) {
+                Alert.alert('Error', 'Could not get current location. Ensure GPS is on.');
+                setIsStartingTracking(false);
                 return;
             }
-            proceedToTrack(startLoc, info);
-        } else {
-            proceedToTrack(startLoc, null);
+
+            const info = await RoutingService.getRouteDetails(startLoc.coords, destination, travelMode);
+            if (info) {
+                const distKm = info.distance / 1000;
+                const timeMin = info.duration / 60;
+                const threshDist = parseFloat(distanceThreshold);
+                const threshTime = parseFloat(timeThreshold);
+
+                // Validation Checks
+                if (distKm < threshDist) {
+                    const msg = `You are ${distKm.toFixed(2)}km away, closer than your ${threshDist}km threshold.`;
+                    if (Platform.OS === 'web') {
+                        if (window.confirm(`${msg} Start anyway?`)) proceedToTrack(startLoc, info);
+                        else setIsStartingTracking(false);
+                    } else {
+                        Alert.alert('Already Within Range', msg, [
+                            { text: 'Cancel', style: 'cancel', onPress: () => setIsStartingTracking(false) },
+                            { text: 'Start Anyway', onPress: () => proceedToTrack(startLoc, info) }
+                        ]);
+                    }
+                    return;
+                } else if (timeMin < threshTime) {
+                    const msg = `You are ${timeMin.toFixed(0)} mins away, less than your ${threshTime} min threshold.`;
+                    if (Platform.OS === 'web') {
+                        if (window.confirm(`${msg} Start anyway?`)) proceedToTrack(startLoc, info);
+                        else setIsStartingTracking(false);
+                    } else {
+                        Alert.alert('Already Within Range', msg, [
+                            { text: 'Cancel', style: 'cancel', onPress: () => setIsStartingTracking(false) },
+                            { text: 'Start Anyway', onPress: () => proceedToTrack(startLoc, info) }
+                        ]);
+                    }
+                    return;
+                }
+                proceedToTrack(startLoc, info);
+            } else {
+                proceedToTrack(startLoc, null);
+            }
+        } catch (e) {
+            console.log(e);
+            setIsStartingTracking(false);
         }
     };
 
     const proceedToTrack = async (startLoc: LocationObject, initialInfo: RouteInfo | null) => {
+        setIsStartingTracking(false); // Stop loading
         setIsTracking(true);
         setStatusMessage('Tracking active...');
         saveSettings();
@@ -471,9 +483,13 @@ export default function HomeScreen() {
                         <TouchableOpacity
                             style={[GLOBAL_STYLES.button, (!destination && { opacity: 0.5 })]}
                             onPress={startTracking}
-                            disabled={!destination}
+                            disabled={!destination || isStartingTracking}
                         >
-                            <Text style={GLOBAL_STYLES.buttonText}>START TRACKING</Text>
+                            {isStartingTracking ? (
+                                <ActivityIndicator color="#FFF" />
+                            ) : (
+                                <Text style={GLOBAL_STYLES.buttonText}>START TRACKING</Text>
+                            )}
                         </TouchableOpacity>
                     </View>
                 ) : (
