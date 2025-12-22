@@ -1,6 +1,7 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Switch, Modal, SafeAreaView, ScrollView, Platform } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Switch, Modal, SafeAreaView, ScrollView, Platform, Alert, ActivityIndicator } from 'react-native';
 import { LightColors, DarkColors } from '../theme';
+import { UpdateService } from '../services/UpdateService';
 
 interface SidebarProps {
     isVisible: boolean;
@@ -18,6 +19,26 @@ export default function Sidebar({
     soundEnabled, toggleSound, vibrationEnabled, toggleVibration
 }: SidebarProps) {
     const colors = isDark ? DarkColors : LightColors;
+    const [isChecking, setIsChecking] = useState(false);
+
+    const handleCheckUpdate = async () => {
+        setIsChecking(true);
+        const { hasUpdate, downloadUrl, latestVersion } = await UpdateService.checkForUpdate();
+        setIsChecking(false);
+
+        if (hasUpdate && downloadUrl) {
+            Alert.alert(
+                'Update Available',
+                `A new version (${latestVersion}) is available. Download and install?`,
+                [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Download', onPress: () => UpdateService.downloadAndInstall(downloadUrl) }
+                ]
+            );
+        } else {
+            Alert.alert('Up to Date', 'You are on the latest version.');
+        }
+    };
 
     return (
         <Modal visible={isVisible} animationType="fade" transparent>
@@ -68,7 +89,20 @@ export default function Sidebar({
                         <View style={styles.aboutContainer}>
                             <Text style={[styles.aboutText, { color: colors.text }]}>Geo Reminder</Text>
                             <Text style={[styles.aboutSub, { color: colors.textSecondary }]}>Version 1.0.2</Text>
-                            <Text style={[styles.aboutSub, { color: colors.textSecondary, marginTop: 8 }]}>
+
+                            <TouchableOpacity
+                                style={[styles.updateBtn, { backgroundColor: colors.inputBg }]}
+                                onPress={handleCheckUpdate}
+                                disabled={isChecking}
+                            >
+                                {isChecking ? (
+                                    <ActivityIndicator size="small" color={colors.primary} />
+                                ) : (
+                                    <Text style={{ color: colors.primary, fontWeight: '600' }}>Check for Updates</Text>
+                                )}
+                            </TouchableOpacity>
+
+                            <Text style={[styles.aboutSub, { color: colors.textSecondary, marginTop: 16 }]}>
                                 Made with ❤️ by Nisarga.
                             </Text>
                         </View>
@@ -143,5 +177,12 @@ const styles = StyleSheet.create({
     },
     aboutSub: {
         fontSize: 14,
+    },
+    updateBtn: {
+        marginTop: 12,
+        padding: 10,
+        borderRadius: 8,
+        alignItems: 'center',
+        alignSelf: 'flex-start'
     }
 });
