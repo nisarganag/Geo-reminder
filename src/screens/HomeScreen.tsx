@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TextInput, StyleSheet, Alert, Platform, ScrollView, TouchableOpacity, SafeAreaView, StatusBar as RNStatusBar, ActivityIndicator, Animated, Easing } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Ionicons } from '@expo/vector-icons';
 import MapViewer from '../components/MapViewer';
 import Sidebar from '../components/Sidebar';
 
@@ -282,7 +283,7 @@ export default function HomeScreen() {
             const targetKm = parseFloat(distanceThreshold);
             const targetMins = parseFloat(timeThreshold);
 
-            setStatusMessage(`${remainingKm.toFixed(1)} km  •  ${remainingMins.toFixed(0)} min`);
+            // setStatusMessage(`${remainingKm.toFixed(1)} km  •  ${remainingMins.toFixed(0)} min`);
 
             const distTrigger = remainingKm <= targetKm;
             const timeTrigger = remainingMins <= targetMins;
@@ -352,7 +353,7 @@ export default function HomeScreen() {
                                     {currentAddress === 'Updating...' ? (
                                         <ActivityIndicator size="small" color={colors.primary} />
                                     ) : (
-                                        <Text style={{ fontSize: 18 }}>🔄</Text>
+                                        <Ionicons name="refresh" size={24} color={colors.text} />
                                     )}
                                 </TouchableOpacity>
                             </View>
@@ -505,7 +506,20 @@ export default function HomeScreen() {
                                 <Text style={styles.trackingTitle}>LIVE TRACKING</Text>
                             </View>
 
-                            <Text style={styles.statusValue}>{statusMessage}</Text>
+                            <View style={{ alignItems: 'center', marginVertical: 10 }}>
+                                {isTracking && routeInfo ? (
+                                    <>
+                                        <Text style={[styles.statusValue, { marginBottom: 0, lineHeight: 42 }]}>
+                                            {(routeInfo.distance / 1000).toFixed(1)} <Text style={{ fontSize: 24, fontWeight: '600', color: colors.textSecondary }}>km</Text>
+                                        </Text>
+                                        <Text style={[styles.statusValue, { marginTop: 0, lineHeight: 42 }]}>
+                                            {(routeInfo.duration / 60).toFixed(0)} <Text style={{ fontSize: 24, fontWeight: '600', color: colors.textSecondary }}>min</Text>
+                                        </Text>
+                                    </>
+                                ) : (
+                                    <Text style={styles.statusValue}>{statusMessage}</Text>
+                                )}
+                            </View>
                             <Text style={styles.statusLabel}>REMAINING</Text>
 
                             <SimpleProgressBar progress={getProgress()} color={colors.primary} />
@@ -647,7 +661,7 @@ const getLocalStyles = (colors: typeof LightColors) => StyleSheet.create({
     },
     dropdown: {
         position: 'absolute',
-        top: 70, // Increased to clear input
+        top: 86, // Increased to clear input
         left: 0,
         right: 0,
         backgroundColor: colors.card,
