@@ -6,7 +6,13 @@ export const RoutingService = {
       const response = await fetch(
         `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
           query
-        )}`
+        )}`,
+        {
+          headers: {
+            "User-Agent": "GeoReminderApp/1.0",
+            "Accept-Language": "en-US,en;q=0.9",
+          },
+        }
       );
       return await response.json();
     } catch (error) {
@@ -41,7 +47,12 @@ export const RoutingService = {
   reverseGeocode: async (coords: LocationCoords): Promise<string | null> => {
     try {
       const response = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${coords.latitude}&lon=${coords.longitude}`
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${coords.latitude}&lon=${coords.longitude}`,
+        {
+          headers: {
+            "User-Agent": "GeoReminderApp/1.0",
+          },
+        }
       );
       const data = await response.json();
       if (data && data.display_name) {
