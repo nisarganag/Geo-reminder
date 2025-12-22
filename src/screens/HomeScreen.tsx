@@ -691,13 +691,22 @@ export default function HomeScreen() {
 
                         {destination && !query && (
                             <View style={styles.selectedContainer}>
-                                <View>
+                                <View style={{ flex: 1 }}>
                                     <Text style={styles.selectedLabel}>SELECTED DESTINATION</Text>
                                     <Text style={styles.selectedText} numberOfLines={1}>{destinationName}</Text>
                                 </View>
-                                <TouchableOpacity onPress={clearSelection}>
-                                    <Text style={{ color: colors.accent, fontWeight: '700' }}>CHANGE</Text>
-                                </TouchableOpacity>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+                                    <TouchableOpacity onPress={toggleFavorite}>
+                                        <Ionicons
+                                            name={favorites.some(f => f.coords.latitude === destination?.latitude && f.coords.longitude === destination?.longitude) ? "heart" : "heart-outline"}
+                                            size={24}
+                                            color="#FF3B30"
+                                        />
+                                    </TouchableOpacity>
+                                    <TouchableOpacity onPress={clearSelection}>
+                                        <Text style={{ color: colors.accent, fontWeight: '700' }}>CHANGE</Text>
+                                    </TouchableOpacity>
+                                </View>
                             </View>
                         )}
 
