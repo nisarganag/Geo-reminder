@@ -63,6 +63,11 @@ export default function HomeScreen() {
     const lastNotificationTime = useRef<number>(0);
     const searchTimeout = useRef<NodeJS.Timeout | null>(null);
 
+    // API Throttling Refs
+    const lastApiCallTime = useRef<number>(0);
+    const distanceCorrectionRatio = useRef<number>(1.2); // Road distance is usually ~1.2x aerial
+    const averageSpeed = useRef<number>(10); // m/s (default ~36km/h)
+
     const [currentAddress, setCurrentAddress] = useState('Locating...');
 
     useEffect(() => {
@@ -247,6 +252,18 @@ export default function HomeScreen() {
         if (initialInfo) {
             setInitialDistance(initialInfo.distance);
             setRouteInfo(initialInfo);
+
+            // Initialize Optimization Refs
+            lastApiCallTime.current = Date.now();
+            if (destination) {
+                const aerial = RoutingService.calculateHaversine(startLoc.coords, destination);
+                if (aerial.distance > 0) {
+                    distanceCorrectionRatio.current = initialInfo.distance / aerial.distance;
+                }
+                if (initialInfo.duration > 0) {
+                    averageSpeed.current = initialInfo.distance / initialInfo.duration;
+                }
+            }
         } else {
             setInitialDistance(null);
         }
@@ -272,7 +289,42 @@ export default function HomeScreen() {
     const checkProximity = async (userCoords: LocationCoords) => {
         if (!destination) return;
 
-        const info = await RoutingService.getRouteDetails(userCoords, destination, travelMode);
+        let info: RouteInfo | null = null;
+        const now = Date.now();
+        const timeSinceLastCall = now - lastApiCallTime.current;
+        const REFRESH_INTERVAL = 5 * 60 * 1000; // 5 Minutes
+
+        // OPTIMIZATION: Only call Google API if > 5 mins have passed OR we are in 'aerial' mode (which is free/local)
+        // Otherwise, use local estimation to save $$$
+        if (travelMode === 'driving' && timeSinceLastCall < REFRESH_INTERVAL && initialDistance !== null && routeInfo) {
+            // --- LOCAL ESTIMATION ---
+            const aerial = RoutingService.calculateHaversine(userCoords, destination);
+            const estRoadDist = aerial.distance * distanceCorrectionRatio.current;
+            const estDuration = estRoadDist / averageSpeed.current;
+
+            // Preserve existing geometry so the line doesn't disappear
+            info = {
+                distance: estRoadDist,
+                duration: estDuration,
+                geometry: routeInfo.geometry
+            };
+        } else {
+            // --- GOOGLE API REFRESH ---
+            info = await RoutingService.getRouteDetails(userCoords, destination, travelMode);
+
+            if (info && travelMode === 'driving') {
+                lastApiCallTime.current = now;
+                // Update ratios for better future estimation
+                const aerial = RoutingService.calculateHaversine(userCoords, destination);
+                if (aerial.distance > 100) { // Only update ratio if we aren't super close (avoid div/0 or weirdness)
+                    distanceCorrectionRatio.current = info.distance / aerial.distance;
+                }
+                if (info.duration > 0) {
+                    averageSpeed.current = info.distance / info.duration;
+                }
+            }
+        }
+
         if (info) {
             setRouteInfo(info);
             // If initial was never set (e.g. route failed at start but works now), set it
@@ -289,8 +341,9 @@ export default function HomeScreen() {
             const timeTrigger = remainingMins <= targetMins;
 
             if (distTrigger || timeTrigger) {
-                const now = Date.now();
-                if (now - lastNotificationTime.current > 5 * 60 * 1000) {
+                const timeDiff = now - lastNotificationTime.current;
+                // Don't spam notifications (limit to once every 5 mins)
+                if (timeDiff > 5 * 60 * 1000) {
                     const triggerType = distTrigger ? 'Distance' : 'Time';
                     const msg = `You are ${remainingKm.toFixed(1)}km and ${remainingMins.toFixed(0)}min away from ${destinationName}`;
 
@@ -544,6 +597,7 @@ export default function HomeScreen() {
                                     destination={destination}
                                     currentLocation={currentLocation.coords}
                                     isTracking={true}
+                                    routeGeometry={routeInfo?.geometry}
                                 />
                             </View>
                         )}
