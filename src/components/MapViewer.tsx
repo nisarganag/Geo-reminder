@@ -1,16 +1,17 @@
 import React, { useRef, useEffect } from 'react';
 import { View, StyleSheet } from 'react-native';
 import MapView, { Marker, Polyline, UrlTile } from 'react-native-maps';
-import { COLORS } from '../theme';
+import { LightColors } from '../theme';
 
 interface MapViewerProps {
     destination?: { latitude: number; longitude: number; } | null;
     currentLocation?: { latitude: number; longitude: number; } | null;
     style?: any;
     isTracking?: boolean;
+    routeGeometry?: any[]; // Array of [lat, lon]
 }
 
-export default function MapViewer({ destination, currentLocation, style, isTracking }: MapViewerProps) {
+export default function MapViewer({ destination, currentLocation, style, isTracking, routeGeometry }: MapViewerProps) {
     const mapRef = useRef<MapView>(null);
 
     useEffect(() => {
@@ -33,6 +34,11 @@ export default function MapViewer({ destination, currentLocation, style, isTrack
         longitudeDelta: 0.02,
     } : undefined;
 
+    // Convert routeGeometry (Array of arrays [[lat, lon]]) to MapView coordinates format ({latitude, longitude})
+    const polylineCoordinates = routeGeometry
+        ? routeGeometry.map((pt: number[]) => ({ latitude: pt[0], longitude: pt[1] }))
+        : (currentLocation && destination ? [currentLocation, destination] : []);
+
     return (
         <MapView
             ref={mapRef}
@@ -51,10 +57,10 @@ export default function MapViewer({ destination, currentLocation, style, isTrack
             {destination && (
                 <Marker coordinate={destination} title="Destination" />
             )}
-            {currentLocation && destination && (
+            {polylineCoordinates.length > 0 && (
                 <Polyline
-                    coordinates={[currentLocation, destination]}
-                    strokeColor={COLORS.primary}
+                    coordinates={polylineCoordinates}
+                    strokeColor={LightColors.primary}
                     strokeWidth={3}
                 />
             )}

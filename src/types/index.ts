@@ -12,6 +12,7 @@ export interface SearchResult {
 export interface RouteInfo {
   distance: number; // in meters
   duration: number; // in seconds
+  geometry?: any[]; // GeoJSON coordinates or Polyline points [[lat,lon],...]
 }
 
 export interface ReminderSettings {

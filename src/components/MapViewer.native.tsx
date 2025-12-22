@@ -7,9 +7,10 @@ interface MapViewerProps {
     currentLocation?: { latitude: number; longitude: number; } | null;
     style?: any;
     isTracking?: boolean;
+    routeGeometry?: any[]; // Array of [lat, lon]
 }
 
-export default function MapViewer({ destination, currentLocation, style, isTracking }: MapViewerProps) {
+export default function MapViewer({ destination, currentLocation, style, isTracking, routeGeometry }: MapViewerProps) {
     const webviewRef = useRef<WebView>(null);
 
     const destLat = destination?.latitude || 0;
@@ -74,11 +75,21 @@ export default function MapViewer({ destination, currentLocation, style, isTrack
                 ` : ''}
 
                 ${hasCurr && hasDest ? `
-                    var latlngs = [
-                        [${currLat}, ${currLon}],
-                        [${destLat}, ${destLon}]
-                    ];
-                    var polyline = L.polyline(latlngs, {color: '#6C5CE7', weight: 4, opacity: 0.8}).addTo(map);
+                    var latlngs;
+                    
+                    // IF we have full geometry (from Google), use it. Else use straight line.
+                    var rawGeometry = ${JSON.stringify(routeGeometry || [])};
+                    
+                    if (rawGeometry && rawGeometry.length > 0) {
+                        latlngs = rawGeometry;
+                    } else {
+                        latlngs = [
+                            [${currLat}, ${currLon}],
+                            [${destLat}, ${destLon}]
+                        ];
+                    }
+
+                    var polyline = L.polyline(latlngs, {color: '#4285F4', weight: 5, opacity: 0.8}).addTo(map);
                 ` : ''}
 
                 if (bounds.length > 0) {

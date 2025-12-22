@@ -1,4 +1,42 @@
 import { LocationCoords, RouteInfo, SearchResult } from "../types";
+// Polyline decoder is implemented locally
+
+// Simple Polyline Decoder (Google Encoded String -> [[lat, lon], ...])
+const decodePolyline = (t: string) => {
+  let points = [];
+  let index = 0,
+    len = t.length;
+  let lat = 0,
+    lng = 0;
+
+  while (index < len) {
+    let b,
+      shift = 0,
+      result = 0;
+    do {
+      b = t.charCodeAt(index++) - 63;
+      result |= (b & 0x1f) << shift;
+      shift += 5;
+    } while (b >= 0x20);
+    let dlat = result & 1 ? ~(result >> 1) : result >> 1;
+    lat += dlat;
+
+    shift = 0;
+    result = 0;
+    do {
+      b = t.charCodeAt(index++) - 63;
+      result |= (b & 0x1f) << shift;
+      shift += 5;
+    } while (b >= 0x20);
+    let dlng = result & 1 ? ~(result >> 1) : result >> 1;
+    lng += dlng;
+
+    points.push([lat / 1e5, lng / 1e5]);
+  }
+  return points;
+};
+
+const GOOGLE_API_KEY = "AIzaSyCslEV-aPV62y_yUxccMH9TTnlnJM9_7LM";
 
 export const RoutingService = {
   searchLocation: async (
@@ -6,31 +44,26 @@ export const RoutingService = {
     userCoords?: LocationCoords
   ): Promise<SearchResult[]> => {
     try {
-      // Use Photon API for context-aware search
-      let url = `https://photon.komoot.io/api/?q=${encodeURIComponent(
+      // GOOGLE GEOCODING API
+      // We use this for "Search" to allow finding addresses globally with high accuracy.
+      let url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(
         query
-      )}&limit=5`;
+      )}&key=${GOOGLE_API_KEY}`;
 
-      // If we have user location, bias the search
-      if (userCoords) {
-        url += `&lat=${userCoords.latitude}&lon=${userCoords.longitude}`;
-      }
+      // If userCoords provided, we can bias results (though Geocoding API bias is region/bounds based)
+      // For strict viewport biasing, Places API is better, but Geocoding is good for general search.
+      // We can add &region=IN for India bias if desired, or bounds.
+      // Let's keep it simple first.
 
       const response = await fetch(url);
       const data = await response.json();
 
-      // Transform Photon GeoJSON to match our SearchResult interface
-      if (data.features) {
-        return data.features.map((f: any) => ({
-          display_name:
-            f.properties.name +
-            ", " +
-            [f.properties.city, f.properties.state, f.properties.country]
-              .filter(Boolean)
-              .join(", "),
-          lat: f.geometry.coordinates[1].toString(),
-          lon: f.geometry.coordinates[0].toString(),
-          importance: f.properties.osm_type === "node" ? 0.8 : 0.5, // Rough estimation
+      if (data.status === "OK" && data.results) {
+        return data.results.map((r: any) => ({
+          display_name: r.formatted_address,
+          lat: r.geometry.location.lat.toString(),
+          lon: r.geometry.location.lng.toString(),
+          importance: 1.0, // Google results are high confidence
         }));
       }
       return [];
@@ -50,20 +83,31 @@ export const RoutingService = {
     }
 
     try {
-      // OSRM Public Demo Server (Driving)
-      // Note: This often fails for very long distances (e.g. inter-continental or >1000km)
-      const response = await fetch(
-        `https://router.project-osrm.org/route/v1/driving/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?overview=false`
-      );
+      // GOOGLE DIRECTIONS API
+      // Using 'departure_time=now' forces the API to use real-time traffic conditions
+      const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${start.latitude},${start.longitude}&destination=${end.latitude},${end.longitude}&mode=driving&departure_time=now&key=${GOOGLE_API_KEY}`;
+
+      const response = await fetch(url);
       const data = await response.json();
 
-      if (data.code === "Ok" && data.routes && data.routes.length > 0) {
+      if (data.status === "OK" && data.routes.length > 0) {
+        const leg = data.routes[0].legs[0];
+        const points = decodePolyline(data.routes[0].overview_polyline.points);
+
+        // prefer duration_in_traffic if available, else duration
+        const durationSeconds = leg.duration_in_traffic
+          ? leg.duration_in_traffic.value
+          : leg.duration.value;
+
         return {
-          distance: data.routes[0].distance, // meters
-          duration: data.routes[0].duration, // seconds
+          distance: leg.distance.value, // meters
+          duration: durationSeconds, // seconds
+          geometry: points, // Array of [lat, lon]
         };
+      } else {
+        console.error("Google API Error:", data.status, data.error_message);
+        return null;
       }
-      return null;
     } catch (error) {
       console.error("Error getting route details:", error);
       return null;
@@ -88,25 +132,22 @@ export const RoutingService = {
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
     const distance = R * c; // in meters
-    // Assume average flight speed ~800 km/h = ~222 m/s for estimation
-    const duration = distance / 222;
+    const duration = distance / 222; // ~800km/h
 
     return { distance, duration };
   },
 
   reverseGeocode: async (coords: LocationCoords): Promise<string | null> => {
     try {
-      const response = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${coords.latitude}&lon=${coords.longitude}`,
-        {
-          headers: {
-            "User-Agent": "GeoReminderApp/1.0",
-          },
-        }
-      );
+      // GOOGLE REVERSE GEOCODING
+      const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${coords.latitude},${coords.longitude}&key=${GOOGLE_API_KEY}`;
+
+      const response = await fetch(url);
       const data = await response.json();
-      if (data && data.display_name) {
-        return data.display_name;
+
+      if (data.status === "OK" && data.results && data.results.length > 0) {
+        // Return the first (most specific) result
+        return data.results[0].formatted_address;
       }
       return null;
     } catch (error) {

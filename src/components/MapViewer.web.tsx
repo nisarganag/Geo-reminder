@@ -6,6 +6,7 @@ interface MapViewerProps {
     currentLocation?: { latitude: number; longitude: number; } | null;
     style?: any;
     isTracking?: boolean;
+    routeGeometry?: any[];
 }
 
 export default function MapViewer({ destination, currentLocation, style, isTracking }: MapViewerProps) {
