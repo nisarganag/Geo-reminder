@@ -35,7 +35,7 @@ jobs:
 
       - name: Build APK with Gradle
         working-directory: android
-        run: ./gradlew assembleRelease
+        run: ./gradlew assembleRelease --stacktrace --info
         env:
           NODE_OPTIONS: "--max-old-space-size=4096 --openssl-legacy-provider"
 
