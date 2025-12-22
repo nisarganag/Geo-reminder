@@ -39,32 +39,36 @@ class AlarmServiceImpl {
     }
   }
 
-  async startAlarm() {
+  async startAlarm(
+    soundEnabled: boolean = true,
+    vibrationEnabled: boolean = true
+  ) {
     if (this.isPlaying) return;
     this.isPlaying = true;
 
-    // 1. Start Audio
-    try {
-      if (!this.soundObject) {
-        await this.loadSound();
+    // 1. Start Audio (if enabled)
+    if (soundEnabled) {
+      try {
+        if (!this.soundObject) {
+          await this.loadSound();
+        }
+        if (this.soundObject) {
+          await this.soundObject.setVolumeAsync(1.0);
+          await this.soundObject.playAsync();
+        }
+      } catch (e) {
+        console.log("Failed to play sound", e);
       }
-      if (this.soundObject) {
-        await this.soundObject.setVolumeAsync(1.0);
-        await this.soundObject.playAsync();
-      }
-    } catch (e) {
-      console.log("Failed to play sound", e);
     }
 
-    // 2. Start Vibration (Looping)
-    // Android: pattern, iOS: repeat calls
-    const PATTERN = [0, 500, 200, 500];
-    if (Platform.OS === "android") {
-      Vibration.vibrate(PATTERN, true);
-    } else {
-      // iOS doesn't support persistent looping vibration in background easily,
-      // but while app is open/foreground (which it should be for alarm), we can loop.
-      this.doVibrateLoop();
+    // 2. Start Vibration (if enabled)
+    if (vibrationEnabled) {
+      const PATTERN = [0, 500, 200, 500]; // wait 0s, vibrate 500ms, wait 200ms, vibrate 500ms
+      if (Platform.OS === "android") {
+        Vibration.vibrate(PATTERN, true);
+      } else {
+        this.doVibrateLoop();
+      }
     }
   }
 

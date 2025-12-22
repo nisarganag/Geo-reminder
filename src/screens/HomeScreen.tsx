@@ -385,7 +385,7 @@ export default function HomeScreen() {
                 if (isFinalApproach) {
                     if (!isAlarmActive) {
                         setIsAlarmActive(true);
-                        AlarmService.startAlarm(); // Loops sound/vibration
+                        AlarmService.startAlarm(soundEnabled, vibrationEnabled); // Respects user settings
                     }
                 } else {
                     // Standard Notification (Pre-alert)
