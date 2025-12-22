@@ -88,7 +88,7 @@ export default function HomeScreen() {
         setIsSearching(true);
         searchTimeout.current = setTimeout(async () => {
             try {
-                const results = await RoutingService.searchLocation(query);
+                const results = await RoutingService.searchLocation(query, currentLocation?.coords);
                 setSearchResults(results);
             } catch (error) {
                 console.log('Search error:', error);

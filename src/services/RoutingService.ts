@@ -1,20 +1,39 @@
 import { LocationCoords, RouteInfo, SearchResult } from "../types";
 
 export const RoutingService = {
-  searchLocation: async (query: string): Promise<SearchResult[]> => {
+  searchLocation: async (
+    query: string,
+    userCoords?: LocationCoords
+  ): Promise<SearchResult[]> => {
     try {
-      const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
-          query
-        )}`,
-        {
-          headers: {
-            "User-Agent": "GeoReminderApp/1.0",
-            "Accept-Language": "en-US,en;q=0.9",
-          },
-        }
-      );
-      return await response.json();
+      // Use Photon API for context-aware search
+      let url = `https://photon.komoot.io/api/?q=${encodeURIComponent(
+        query
+      )}&limit=5`;
+
+      // If we have user location, bias the search
+      if (userCoords) {
+        url += `&lat=${userCoords.latitude}&lon=${userCoords.longitude}`;
+      }
+
+      const response = await fetch(url);
+      const data = await response.json();
+
+      // Transform Photon GeoJSON to match our SearchResult interface
+      if (data.features) {
+        return data.features.map((f: any) => ({
+          display_name:
+            f.properties.name +
+            ", " +
+            [f.properties.city, f.properties.state, f.properties.country]
+              .filter(Boolean)
+              .join(", "),
+          lat: f.geometry.coordinates[1].toString(),
+          lon: f.geometry.coordinates[0].toString(),
+          importance: f.properties.osm_type === "node" ? 0.8 : 0.5, // Rough estimation
+        }));
+      }
+      return [];
     } catch (error) {
       console.error("Error searching location:", error);
       return [];
@@ -31,6 +50,8 @@ export const RoutingService = {
     }
 
     try {
+      // OSRM Public Demo Server (Driving)
+      // Note: This often fails for very long distances (e.g. inter-continental or >1000km)
       const response = await fetch(
         `https://router.project-osrm.org/route/v1/driving/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?overview=false`
       );
@@ -38,16 +59,13 @@ export const RoutingService = {
 
       if (data.code === "Ok" && data.routes && data.routes.length > 0) {
         return {
-          distance: data.routes[0].distance,
-          duration: data.routes[0].duration,
+          distance: data.routes[0].distance, // meters
+          duration: data.routes[0].duration, // seconds
         };
       }
       return null;
     } catch (error) {
       console.error("Error getting route details:", error);
-      // Fallback to aerial if network fails? No, better to return null or let user define.
-      // But for robust app, maybe fallback is good? User said "if car is selected use on road".
-      // So stick to null on failure to indicate "Rotuing Failed".
       return null;
     }
   },
