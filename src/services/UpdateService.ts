@@ -1,7 +1,6 @@
 import * as FileSystem from "expo-file-system";
 import * as IntentLauncher from "expo-intent-launcher";
 import * as Application from "expo-application";
-import Constants from "expo-constants";
 import { Alert, Platform } from "react-native";
 
 const GITHUB_REPO = "nisarganag/Geo-reminder";
@@ -72,7 +71,13 @@ export const UpdateService = {
       const fs = FileSystem as any;
       const fileUri = (fs.documentDirectory || "") + fileName;
 
-      // 1. Download the APK
+      // 1. Clean up old file if exists to prevent corruption
+      const fileInfo = await fs.getInfoAsync(fileUri);
+      if (fileInfo.exists) {
+        await fs.deleteAsync(fileUri);
+      }
+
+      // 2. Download the APK
       const downloadRes = await fs.downloadAsync(url, fileUri);
 
       if (downloadRes.status !== 200) {
@@ -80,13 +85,15 @@ export const UpdateService = {
         return;
       }
 
-      // 2. Get Content URI for installation (bypass FileUriExposedException)
+      // 3. Get Content URI for installation (bypass FileUriExposedException)
       const contentUri = await fs.getContentUriAsync(fileUri);
+      console.log("Installing from:", contentUri);
 
-      // 3. Launch Install Intent
+      // 4. Launch Install Intent
+      // 1 (FLAG_GRANT_READ_URI_PERMISSION) + 268435456 (FLAG_ACTIVITY_NEW_TASK) = 268435457
       await IntentLauncher.startActivityAsync("android.intent.action.VIEW", {
         data: contentUri,
-        flags: 1, // FLAG_GRANT_READ_URI_PERMISSION
+        flags: 268435457,
         type: "application/vnd.android.package-archive",
       });
     } catch (error: any) {
@@ -94,8 +101,8 @@ export const UpdateService = {
 
       // Check if it's a permission issue or offer to open settings
       Alert.alert(
-        "Install Permission Required",
-        "To update the app, you need to allow installing unknown apps. Would you like to open settings?",
+        "Install Failed",
+        `Error: ${error.message}\n\nTo update, you must allow 'Install Unknown Apps' permission in Settings.`,
         [
           { text: "Cancel", style: "cancel" },
           {
