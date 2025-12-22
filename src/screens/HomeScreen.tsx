@@ -5,6 +5,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import MapViewer from '../components/MapViewer';
 import Sidebar from '../components/Sidebar';
+import { OnboardingOverlay } from '../components/OnboardingOverlay';
+import { ArrivalOverlay } from '../components/ArrivalOverlay';
+import { HapticService } from '../services/HapticService';
 
 import { LocationService } from '../services/LocationService';
 import { RoutingService } from '../services/RoutingService';
@@ -107,9 +110,22 @@ export default function HomeScreen() {
 
     useEffect(() => {
         loadSettings();
-        checkPermissions().then(() => {
-            refreshLocation();
-        });
+        loadSettings();
+
+        // Move initial permission check to respect Onboarding flow
+        const init = async () => {
+            try {
+                const hasSeen = await AsyncStorage.getItem('@has_seen_onboarding_v2.1');
+                if (hasSeen === 'true') {
+                    checkPermissions().then(() => {
+                        refreshLocation();
+                    });
+                }
+            } catch (e) {
+                checkPermissions();
+            }
+        };
+        init();
         return () => {
             stopTracking();
         }
@@ -269,6 +285,7 @@ export default function HomeScreen() {
                                 address: destinationName
                             };
                             setFavorites([...favorites, newFav]);
+                            HapticService.success();
                         }
                     }
                 ],
@@ -289,6 +306,7 @@ export default function HomeScreen() {
     };
 
     const startTracking = async () => {
+        HapticService.medium();
         if (!destination) {
             Alert.alert('Error', 'Please select a destination');
             return;
@@ -377,6 +395,7 @@ export default function HomeScreen() {
     };
 
     const stopTracking = async () => {
+        HapticService.medium();
         if (locationSubscription.current) {
             await locationSubscription.current.remove();
             locationSubscription.current = null;
@@ -494,35 +513,16 @@ export default function HomeScreen() {
 
     return (
         <SafeAreaView style={globalStyles.container}>
-            {/* ALARM OVERLAY */}
-            {isAlarmActive && (
-                <View style={[StyleSheet.absoluteFill, { backgroundColor: '#FF3B30', zIndex: 10000, justifyContent: 'center', alignItems: 'center', padding: 20 }]}>
-                    <View style={{ marginBottom: 40, alignItems: 'center' }}>
-                        <Ionicons name="notifications-circle" size={120} color="#FFF" />
-                        <Text style={{ fontSize: 42, fontWeight: '900', color: '#FFF', textAlign: 'center', marginTop: 20 }}>ARRIVED!</Text>
-                        <Text style={{ fontSize: 24, fontWeight: '600', color: 'rgba(255,255,255,0.8)', textAlign: 'center', marginTop: 10 }}>{destinationName}</Text>
-                    </View>
+            {/* ARRIVAL OVERLAY - Replaces old red block */}
+            <ArrivalOverlay
+                isVisible={isAlarmActive}
+                onStop={stopAlarm}
+                onSnooze={snoozeAlarm}
+                destinationName={destinationName}
+            />
 
-                    <TouchableOpacity
-                        onPress={stopAlarm}
-                        style={{ backgroundColor: '#FFF', paddingVertical: 24, paddingHorizontal: 48, borderRadius: 40, elevation: 10, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 20, shadowOffset: { width: 0, height: 10 }, marginBottom: 30 }}>
-                        <Text style={{ fontSize: 24, fontWeight: '900', color: '#FF3B30', letterSpacing: 1 }}>STOP ALARM</Text>
-                    </TouchableOpacity>
-
-                    {/* SNOOZE BUTTONS */}
-                    <Text style={{ color: 'rgba(255,255,255,0.9)', fontWeight: '700', marginBottom: 16 }}>SNOOZE FOR...</Text>
-                    <View style={{ flexDirection: 'row', gap: 16 }}>
-                        {[3, 5, 10].map(m => (
-                            <TouchableOpacity
-                                key={m}
-                                onPress={() => snoozeAlarm(m)}
-                                style={{ backgroundColor: 'rgba(255,255,255,0.3)', paddingVertical: 12, paddingHorizontal: 20, borderRadius: 20 }}>
-                                <Text style={{ color: '#FFF', fontWeight: '800' }}>{m}m</Text>
-                            </TouchableOpacity>
-                        ))}
-                    </View>
-                </View>
-            )}
+            {/* ONBOARDING OVERLAY */}
+            <OnboardingOverlay onComplete={() => checkPermissions().then(refreshLocation)} />
 
             <View style={styles.header}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
