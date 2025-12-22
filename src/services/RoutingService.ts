@@ -47,15 +47,21 @@ export const RoutingService = {
   ): Promise<SearchResult[]> => {
     try {
       // GOOGLE GEOCODING API
-      // We use this for "Search" to allow finding addresses globally with high accuracy.
       let url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(
         query
       )}&key=${GOOGLE_API_KEY}`;
 
-      // If userCoords provided, we can bias results (though Geocoding API bias is region/bounds based)
-      // For strict viewport biasing, Places API is better, but Geocoding is good for general search.
-      // We can add &region=IN for India bias if desired, or bounds.
-      // Let's keep it simple first.
+      // BIASING: Construct a Bounding Box (~50km radius) around the user if location is known
+      // This solves the "Salt Lake" vs "Salt Lake City" issue by prioritizing local results.
+      if (userCoords) {
+        const delta = 0.5; // Roughly 55km latitude
+        const south = userCoords.latitude - delta;
+        const north = userCoords.latitude + delta;
+        const west = userCoords.longitude - delta;
+        const east = userCoords.longitude + delta;
+
+        url += `&bounds=${south},${west}|${north},${east}`;
+      }
 
       const response = await fetch(url);
       const data = await response.json();
