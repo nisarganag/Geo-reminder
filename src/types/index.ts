@@ -18,6 +18,7 @@ export interface RouteInfo {
 export interface FavoriteLocation {
   id: string;
   label: string;
+  category: "Home" | "Work" | "Family" | "Partner" | "Friend" | "Other"; // Enhanced Categories
   icon: string; // 'home', 'work', 'heart', etc.
   coords: LocationCoords;
   address: string;

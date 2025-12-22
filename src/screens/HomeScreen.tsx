@@ -7,6 +7,8 @@ import MapViewer from '../components/MapViewer';
 import Sidebar from '../components/Sidebar';
 import { OnboardingOverlay } from '../components/OnboardingOverlay';
 import { ArrivalOverlay } from '../components/ArrivalOverlay';
+import { FavoriteInputModal } from '../components/FavoriteInputModal';
+import { FavoritesManager } from '../components/FavoritesManager';
 import { HapticService } from '../services/HapticService';
 
 import { LocationService } from '../services/LocationService';
@@ -69,6 +71,10 @@ export default function HomeScreen() {
     const [snoozeUntil, setSnoozeUntil] = useState<number>(0);
     const [customSoundUri, setCustomSoundUri] = useState<string | null>(null);
     const [customSoundName, setCustomSoundName] = useState<string | null>(null);
+
+    // Favorites UI State
+    const [showFavInputModal, setShowFavInputModal] = useState(false);
+    const [showFavManager, setShowFavManager] = useState(false);
 
     const pickSound = async () => {
         try {
@@ -264,43 +270,42 @@ export default function HomeScreen() {
     const toggleFavorite = () => {
         if (!destination) return;
 
-        // Check if already favorite (by coordinates close enough)
+        // Check if already favorite
         const existingIndex = favorites.findIndex(f =>
             Math.abs(f.coords.latitude - destination.latitude) < 0.0001 &&
             Math.abs(f.coords.longitude - destination.longitude) < 0.0001
         );
 
         if (existingIndex >= 0) {
-            // Remove
+            // Toggle OFF (Remove)
             const newFavs = [...favorites];
             newFavs.splice(existingIndex, 1);
             setFavorites(newFavs);
         } else {
-            // Add
-            Alert.prompt(
-                "Save Favorite",
-                "Enter a label (e.g., Home, Work)",
-                [
-                    { text: "Cancel", style: "cancel" },
-                    {
-                        text: "Save",
-                        onPress: (label) => {
-                            const newFav = {
-                                id: Date.now().toString(),
-                                label: label || destinationName,
-                                icon: 'hearts', // Default, could be smart
-                                coords: destination,
-                                address: destinationName
-                            };
-                            setFavorites([...favorites, newFav]);
-                            HapticService.success();
-                        }
-                    }
-                ],
-                "plain-text",
-                destinationName // Default value
-            );
+            // Toggle ON (Open Input Modal)
+            setShowFavInputModal(true);
+            HapticService.light();
         }
+    };
+
+    const handleSaveFavorite = (label: string, category: any) => {
+        if (!destination) return;
+        const newFav: FavoriteLocation = {
+            id: Date.now().toString(),
+            label: label,
+            category: category,
+            icon: 'hearts',
+            coords: destination,
+            address: destinationName
+        };
+        setFavorites([...favorites, newFav]);
+        setShowFavInputModal(false);
+        HapticService.success();
+    };
+
+    const handleDeleteFavorite = (id: string) => {
+        setFavorites(favorites.filter(f => f.id !== id));
+        HapticService.medium();
     };
 
     // Auto-Save whenever favorites change
@@ -535,6 +540,23 @@ export default function HomeScreen() {
             {/* ONBOARDING OVERLAY */}
             <OnboardingOverlay onComplete={() => checkPermissions().then(refreshLocation)} />
 
+            {/* FAVORITES MODALS */}
+            <FavoriteInputModal
+                isVisible={showFavInputModal}
+                onClose={() => setShowFavInputModal(false)}
+                onSave={handleSaveFavorite}
+                defaultName={destinationName}
+                isDark={isDark}
+            />
+            <FavoritesManager
+                isVisible={showFavManager}
+                onClose={() => setShowFavManager(false)}
+                favorites={favorites}
+                onSelect={selectFavorite}
+                onDelete={handleDeleteFavorite}
+                isDark={isDark}
+            />
+
             <View style={styles.header}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
                     <View>
@@ -558,6 +580,10 @@ export default function HomeScreen() {
                 toggleVibration={() => setVibrationEnabled(!vibrationEnabled)}
                 customSoundName={customSoundName}
                 onPickSound={pickSound}
+                onManageFavorites={() => {
+                    setIsSidebarVisible(false);
+                    setTimeout(() => setShowFavManager(true), 300); // Wait for sidebar to close
+                }}
             />
 
             <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">

@@ -14,12 +14,13 @@ interface SidebarProps {
     toggleVibration: () => void;
     customSoundName?: string | null;
     onPickSound?: () => void;
+    onManageFavorites?: () => void;
 }
 
 export default function Sidebar({
     isVisible, onClose, isDark, toggleTheme,
     soundEnabled, toggleSound, vibrationEnabled, toggleVibration,
-    customSoundName, onPickSound
+    customSoundName, onPickSound, onManageFavorites
 }: SidebarProps) {
     const colors = isDark ? DarkColors : LightColors;
     const [isChecking, setIsChecking] = useState(false);
@@ -121,6 +122,20 @@ export default function Sidebar({
                             <Text style={{ color: colors.primary, fontWeight: '600' }}>EDIT</Text>
                         </TouchableOpacity>
 
+                        {/* MANAGE FAVORITES - NEW */}
+                        <TouchableOpacity
+                            style={[styles.row, { borderBottomWidth: 0, marginTop: 8 }]}
+                            onPress={onManageFavorites}
+                        >
+                            <View>
+                                <Text style={[styles.label, { color: colors.text }]}>Manage Favorites</Text>
+                                <Text style={{ fontSize: 12, color: colors.textSecondary }}>
+                                    View and edit your saved places
+                                </Text>
+                            </View>
+                            <Text style={{ fontSize: 24 }}>❤️</Text>
+                        </TouchableOpacity>
+
                         {/* ABOUT */}
                         <Text style={[styles.sectionTitle, { color: colors.textSecondary, marginTop: 24 }]}>ABOUT</Text>
                         <View style={styles.aboutContainer}>
@@ -145,9 +160,9 @@ export default function Sidebar({
                         </View>
 
                     </ScrollView>
-                </SafeAreaView>
-            </View>
-        </Modal>
+                </SafeAreaView >
+            </View >
+        </Modal >
     );
 }
 
