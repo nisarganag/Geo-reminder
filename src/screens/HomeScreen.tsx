@@ -1,28 +1,55 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, TextInput, StyleSheet, Alert, Platform, ScrollView, TouchableOpacity, SafeAreaView, StatusBar as RNStatusBar, Dimensions, ActivityIndicator } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, TextInput, StyleSheet, Alert, Platform, ScrollView, TouchableOpacity, SafeAreaView, StatusBar as RNStatusBar, ActivityIndicator, Animated, Easing } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import MapViewer from '../components/MapViewer';
+import Sidebar from '../components/Sidebar';
 
 import { LocationService } from '../services/LocationService';
 import { RoutingService } from '../services/RoutingService';
 import { NotificationService } from '../services/NotificationService';
 import { LocationCoords, SearchResult, RouteInfo, ReminderSettings } from '../types';
 import { LocationObject } from 'expo-location';
-import { COLORS, GLOBAL_STYLES, SHADOWS } from '../theme';
+import { LightColors, DarkColors, getGlobalStyles, SHADOWS } from '../theme';
 
 const STORAGE_KEY = 'GEO_REMINDER_SETTINGS';
 
 // ------------------- UI Components -------------------
 
-const SimpleProgressBar = ({ progress }: { progress: number }) => (
+const SimpleProgressBar = ({ progress, color }: { progress: number, color: string }) => (
     <View style={localStyles.progressContainer}>
-        <View style={[localStyles.progressBar, { width: `${Math.min(100, Math.max(0, progress * 100))}%` }]} />
+        <View style={[localStyles.progressBar, { backgroundColor: color, width: `${Math.min(100, Math.max(0, progress * 100))}%` }]} />
     </View>
 );
 
 // ------------------- Main Component -------------------
 
 export default function HomeScreen() {
+    // Theme & Sidebar State
+    const [isDark, setIsDark] = useState(false);
+    const [isSidebarVisible, setIsSidebarVisible] = useState(false);
+
+    // Derived Colors & Styles
+    const colors = isDark ? DarkColors : LightColors;
+    const globalStyles = getGlobalStyles(colors, isDark);
+    const styles = getLocalStyles(colors);
+
+    // Animation for Refresh
+    const spinValue = useRef(new Animated.Value(0)).current;
+    const spin = spinValue.interpolate({
+        inputRange: [0, 1],
+        outputRange: ['0deg', '360deg']
+    });
+
+    const runSpinAnimation = () => {
+        spinValue.setValue(0);
+        Animated.timing(spinValue, {
+            toValue: 1,
+            duration: 1000,
+            easing: Easing.linear,
+            useNativeDriver: true,
+        }).start();
+    };
+
     const [query, setQuery] = useState('');
     const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
     const [isSearching, setIsSearching] = useState(false);
@@ -40,7 +67,7 @@ export default function HomeScreen() {
     const [travelMode, setTravelMode] = useState<'driving' | 'aerial'>('driving');
 
     const [isTracking, setIsTracking] = useState(false);
-    const [isStartingTracking, setIsStartingTracking] = useState(false); // Loading state for button
+    const [isStartingTracking, setIsStartingTracking] = useState(false);
     const [currentLocation, setCurrentLocation] = useState<LocationObject | null>(null);
     const [routeInfo, setRouteInfo] = useState<RouteInfo | null>(null);
     const [statusMessage, setStatusMessage] = useState('Ready to start');
@@ -50,7 +77,6 @@ export default function HomeScreen() {
     const lastNotificationTime = useRef<number>(0);
     const searchTimeout = useRef<NodeJS.Timeout | null>(null);
 
-    // New State for Address
     const [currentAddress, setCurrentAddress] = useState('Locating...');
 
     useEffect(() => {
@@ -83,7 +109,7 @@ export default function HomeScreen() {
             } finally {
                 setIsSearching(false);
             }
-        }, 400); // reduced to 400ms for "instant" feel
+        }, 400);
 
         return () => {
             if (searchTimeout.current) clearTimeout(searchTimeout.current);
@@ -91,19 +117,15 @@ export default function HomeScreen() {
     }, [query]);
 
     const refreshLocation = async () => {
+        runSpinAnimation();
         setCurrentAddress('Updating...');
         const loc = await LocationService.getCurrentLocation();
         if (loc) {
             setCurrentLocation(loc);
-            // Try native geocoding first (Device/Google)
             let addr = await LocationService.reverseGeocode(loc.coords);
-
-            // Fallback to OSM/Nominatim (Web/No API Key)
             if (!addr) {
-                console.log('Native geocoding failed, trying OSM...');
                 addr = await RoutingService.reverseGeocode(loc.coords);
             }
-
             setCurrentAddress(addr || 'Unknown Location');
         } else {
             setCurrentAddress('Location unavailable');
@@ -122,7 +144,8 @@ export default function HomeScreen() {
         try {
             const saved = await AsyncStorage.getItem(STORAGE_KEY);
             if (saved) {
-                const settings: ReminderSettings = JSON.parse(saved);
+                const settings: ReminderSettings & { isDark?: boolean } = JSON.parse(saved);
+                if (settings.isDark !== undefined) setIsDark(settings.isDark);
                 if (settings.destination) {
                     setDestination(settings.destination);
                     setDestinationName(settings.destinationName);
@@ -139,20 +162,24 @@ export default function HomeScreen() {
 
     const saveSettings = async () => {
         try {
-            const settings: ReminderSettings = {
+            const settings = {
                 destination,
                 destinationName,
                 distanceThreshold: parseFloat(distanceThreshold) * 1000,
                 timeThreshold: parseFloat(timeThreshold),
                 isActive: isTracking,
                 soundEnabled,
-                vibrationEnabled
+                vibrationEnabled,
+                isDark,
             };
             await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
         } catch (e) {
             console.log('Failed to save settings', e);
         }
     };
+
+    // Auto save theme when changed
+    useEffect(() => { saveSettings(); }, [isDark, soundEnabled, vibrationEnabled]);
 
     const selectDestination = (item: SearchResult) => {
         setDestination({
@@ -161,7 +188,7 @@ export default function HomeScreen() {
         });
         setDestinationName(item.display_name);
         setSearchResults([]);
-        setQuery(''); // Clear query logic
+        setQuery('');
     };
 
     const clearSelection = () => {
@@ -177,7 +204,7 @@ export default function HomeScreen() {
             return;
         }
 
-        setIsStartingTracking(true); // Start loading
+        setIsStartingTracking(true);
 
         try {
             const startLoc = await LocationService.getCurrentLocation();
@@ -194,30 +221,13 @@ export default function HomeScreen() {
                 const threshDist = parseFloat(distanceThreshold);
                 const threshTime = parseFloat(timeThreshold);
 
-                // Validation Checks
                 if (distKm < threshDist) {
                     const msg = `You are ${distKm.toFixed(2)}km away, closer than your ${threshDist}km threshold.`;
-                    if (Platform.OS === 'web') {
-                        if (window.confirm(`${msg} Start anyway?`)) proceedToTrack(startLoc, info);
-                        else setIsStartingTracking(false);
-                    } else {
-                        Alert.alert('Already Within Range', msg, [
-                            { text: 'Cancel', style: 'cancel', onPress: () => setIsStartingTracking(false) },
-                            { text: 'Start Anyway', onPress: () => proceedToTrack(startLoc, info) }
-                        ]);
-                    }
+                    proceedWithConfirmation(msg, startLoc, info);
                     return;
                 } else if (timeMin < threshTime) {
                     const msg = `You are ${timeMin.toFixed(0)} mins away, less than your ${threshTime} min threshold.`;
-                    if (Platform.OS === 'web') {
-                        if (window.confirm(`${msg} Start anyway?`)) proceedToTrack(startLoc, info);
-                        else setIsStartingTracking(false);
-                    } else {
-                        Alert.alert('Already Within Range', msg, [
-                            { text: 'Cancel', style: 'cancel', onPress: () => setIsStartingTracking(false) },
-                            { text: 'Start Anyway', onPress: () => proceedToTrack(startLoc, info) }
-                        ]);
-                    }
+                    proceedWithConfirmation(msg, startLoc, info);
                     return;
                 }
                 proceedToTrack(startLoc, info);
@@ -230,8 +240,20 @@ export default function HomeScreen() {
         }
     };
 
+    const proceedWithConfirmation = (msg: string, startLoc: LocationObject, info: RouteInfo) => {
+        if (Platform.OS === 'web') {
+            if (window.confirm(`${msg} Start anyway?`)) proceedToTrack(startLoc, info);
+            else setIsStartingTracking(false);
+        } else {
+            Alert.alert('Already Within Range', msg, [
+                { text: 'Cancel', style: 'cancel', onPress: () => setIsStartingTracking(false) },
+                { text: 'Start Anyway', onPress: () => proceedToTrack(startLoc, info) }
+            ]);
+        }
+    }
+
     const proceedToTrack = async (startLoc: LocationObject, initialInfo: RouteInfo | null) => {
-        setIsStartingTracking(false); // Stop loading
+        setIsStartingTracking(false);
         setIsTracking(true);
         setStatusMessage('Tracking active...');
         saveSettings();
@@ -298,78 +320,90 @@ export default function HomeScreen() {
 
     const getProgress = () => {
         if (!initialDistance || !routeInfo) return 0;
-        // Avoid division by zero
         if (initialDistance === 0) return 1;
-
         const p = (initialDistance - routeInfo.distance) / initialDistance;
         return Math.min(1, Math.max(0, p));
     };
 
     return (
-        <SafeAreaView style={GLOBAL_STYLES.container}>
-            {/* Ambient Background Gradient (Web) */}
-            {Platform.OS === 'web' && (
-                <View style={localStyles.gradientBg as any} />
-            )}
-
-            <View style={localStyles.header}>
-                <Text style={localStyles.headerTitle}>GEO REMINDER</Text>
-                <Text style={localStyles.headerSubtitle}>Smart Location Alerts</Text>
+        <SafeAreaView style={globalStyles.container}>
+            <View style={styles.header}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                    <View>
+                        <Text style={styles.headerTitle}>GEO REMINDER</Text>
+                        <Text style={styles.headerSubtitle}>Smart Location Alerts</Text>
+                    </View>
+                    <TouchableOpacity onPress={() => setIsSidebarVisible(true)} style={styles.menuButton}>
+                        <Text style={{ fontSize: 24, color: colors.text }}>☰</Text>
+                    </TouchableOpacity>
+                </View>
             </View>
 
-            <ScrollView contentContainerStyle={localStyles.content} keyboardShouldPersistTaps="handled">
+            <Sidebar
+                isVisible={isSidebarVisible}
+                onClose={() => setIsSidebarVisible(false)}
+                isDark={isDark}
+                toggleTheme={() => setIsDark(!isDark)}
+                soundEnabled={soundEnabled}
+                toggleSound={() => setSoundEnabled(!soundEnabled)}
+                vibrationEnabled={vibrationEnabled}
+                toggleVibration={() => setVibrationEnabled(!vibrationEnabled)}
+            />
+
+            <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
 
                 {!isTracking ? (
                     <View style={{ gap: 24 }}>
                         {/* Your Location Card */}
-                        <View style={[GLOBAL_STYLES.card, localStyles.locationCard]}>
-                            {/* Sheet Handle */}
+                        <View style={[globalStyles.card, styles.locationCard]}>
+                            {/* Sheet Handle - Styled correctly for theme */}
                             <View style={{ alignItems: 'center', marginBottom: 16 }}>
-                                <View style={{ width: 40, height: 5, borderRadius: 3, backgroundColor: '#E5E5EA' }} />
+                                <View style={{ width: 40, height: 5, borderRadius: 3, backgroundColor: isDark ? '#3A3A3C' : '#E5E5EA' }} />
                             </View>
 
-                            <View style={localStyles.locationHeader}>
-                                <Text style={localStyles.cardTitle}>MY LOCATION</Text>
-                                <TouchableOpacity onPress={refreshLocation} style={localStyles.refreshButton}>
-                                    <Text style={{ fontSize: 18 }}>🔄</Text>
+                            <View style={styles.locationHeader}>
+                                <Text style={styles.cardTitle}>MY LOCATION</Text>
+                                <TouchableOpacity onPress={refreshLocation} style={styles.refreshButton}>
+                                    <Animated.View style={{ transform: [{ rotate: spin }] }}>
+                                        <Text style={{ fontSize: 18 }}>🔄</Text>
+                                    </Animated.View>
                                 </TouchableOpacity>
                             </View>
-                            <View style={localStyles.locationRow}>
-                                <View style={localStyles.iconContainer}>
+                            <View style={styles.locationRow}>
+                                <View style={styles.iconContainer}>
                                     <Text>🏠</Text>
                                 </View>
-                                <Text style={localStyles.locationText} numberOfLines={2}>
+                                <Text style={styles.locationText} numberOfLines={2}>
                                     {currentAddress}
                                 </Text>
                             </View>
                         </View>
 
                         {/* Destination Card */}
-                        <View style={[GLOBAL_STYLES.card, { zIndex: 1000, elevation: 20 }]}>
-                            <Text style={localStyles.cardTitle}>Where to?</Text>
-
-                            <View style={localStyles.searchContainer}>
+                        <View style={[globalStyles.card, { zIndex: 1000 }]}>
+                            <Text style={styles.cardTitle}>Where to?</Text>
+                            <View style={styles.searchContainer}>
                                 <TextInput
-                                    style={localStyles.searchInput}
-                                    placeholder="Search destination (e.g. Eiffel Tower)"
+                                    style={styles.searchInput}
+                                    placeholder="Search destination..."
                                     value={query}
                                     onChangeText={setQuery}
-                                    placeholderTextColor={COLORS.textSecondary}
+                                    placeholderTextColor={colors.textSecondary}
                                 />
                                 {isSearching ? (
-                                    <ActivityIndicator size="small" color={COLORS.primary} style={localStyles.searchIcon} />
+                                    <ActivityIndicator size="small" color={colors.primary} style={styles.searchIcon} />
                                 ) : query.length > 0 ? (
-                                    <TouchableOpacity onPress={() => setQuery('')} style={localStyles.searchIcon}>
-                                        <Text style={{ fontSize: 18, color: COLORS.textSecondary }}>✕</Text>
+                                    <TouchableOpacity onPress={() => setQuery('')} style={styles.searchIcon}>
+                                        <Text style={{ fontSize: 18, color: colors.textSecondary }}>✕</Text>
                                     </TouchableOpacity>
                                 ) : null}
                             </View>
 
                             {/* Dropdown Suggestions */}
                             {searchResults.length > 0 && (
-                                <View style={localStyles.dropdown}>
+                                <View style={styles.dropdown}>
                                     <ScrollView
-                                        style={localStyles.dropdownScroll}
+                                        style={styles.dropdownScroll}
                                         keyboardShouldPersistTaps="handled"
                                         showsVerticalScrollIndicator={true}
                                     >
@@ -377,12 +411,12 @@ export default function HomeScreen() {
                                             <TouchableOpacity
                                                 key={index}
                                                 onPress={() => selectDestination(item)}
-                                                style={localStyles.dropdownItem}
+                                                style={styles.dropdownItem}
                                             >
-                                                <View style={localStyles.iconContainer}>
+                                                <View style={styles.iconContainer}>
                                                     <Text>📍</Text>
                                                 </View>
-                                                <Text style={localStyles.resultText} numberOfLines={2}>
+                                                <Text style={styles.resultText} numberOfLines={2}>
                                                     {item.display_name}
                                                 </Text>
                                             </TouchableOpacity>
@@ -392,13 +426,13 @@ export default function HomeScreen() {
                             )}
 
                             {destination && !query && (
-                                <View style={localStyles.selectedContainer}>
+                                <View style={styles.selectedContainer}>
                                     <View>
-                                        <Text style={localStyles.selectedLabel}>SELECTED DESTINATION</Text>
-                                        <Text style={localStyles.selectedText} numberOfLines={1}>{destinationName}</Text>
+                                        <Text style={styles.selectedLabel}>SELECTED DESTINATION</Text>
+                                        <Text style={styles.selectedText} numberOfLines={1}>{destinationName}</Text>
                                     </View>
                                     <TouchableOpacity onPress={clearSelection}>
-                                        <Text style={{ color: COLORS.accent, fontWeight: '700' }}>CHANGE</Text>
+                                        <Text style={{ color: colors.accent, fontWeight: '700' }}>CHANGE</Text>
                                     </TouchableOpacity>
                                 </View>
                             )}
@@ -406,7 +440,7 @@ export default function HomeScreen() {
 
                         {/* Map Preview */}
                         {destination && (
-                            <View style={[GLOBAL_STYLES.card, localStyles.mapCard]}>
+                            <View style={[globalStyles.card, styles.mapCard]}>
                                 <MapViewer
                                     destination={destination}
                                     style={{ flex: 1 }}
@@ -415,22 +449,22 @@ export default function HomeScreen() {
                         )}
 
                         {/* Settings Card */}
-                        <View style={GLOBAL_STYLES.card}>
-                            <Text style={localStyles.cardTitle}>Alert Me When...</Text>
-                            <View style={localStyles.settingRow}>
-                                <View style={localStyles.settingItem}>
-                                    <Text style={localStyles.settingLabel}>Distance (km)</Text>
+                        <View style={globalStyles.card}>
+                            <Text style={styles.cardTitle}>Alert Me When...</Text>
+                            <View style={styles.settingRow}>
+                                <View style={styles.settingItem}>
+                                    <Text style={styles.settingLabel}>Distance (km)</Text>
                                     <TextInput
-                                        style={localStyles.settingInput}
+                                        style={styles.settingInput}
                                         value={distanceThreshold}
                                         onChangeText={setDistanceThreshold}
                                         keyboardType="numeric"
                                     />
                                 </View>
-                                <View style={localStyles.settingItem}>
-                                    <Text style={localStyles.settingLabel}>Time (min)</Text>
+                                <View style={styles.settingItem}>
+                                    <Text style={styles.settingLabel}>Time (min)</Text>
                                     <TextInput
-                                        style={localStyles.settingInput}
+                                        style={styles.settingInput}
                                         value={timeThreshold}
                                         onChangeText={setTimeThreshold}
                                         keyboardType="numeric"
@@ -438,94 +472,73 @@ export default function HomeScreen() {
                                 </View>
                             </View>
 
-                            <View style={localStyles.divider} />
+                            <View style={styles.divider} />
 
-                            <Text style={[localStyles.cardTitle, { fontSize: 16 }]}>Travel Mode</Text>
-                            <View style={localStyles.toggleRow}>
+                            <Text style={[styles.cardTitle, { fontSize: 16 }]}>Travel Mode</Text>
+                            <View style={styles.toggleRow}>
                                 <TouchableOpacity
-                                    style={[localStyles.toggleBtn, travelMode === 'driving' && localStyles.toggleBtnActive]}
+                                    style={[styles.toggleBtn, travelMode === 'driving' && styles.toggleBtnActive]}
                                     onPress={() => setTravelMode('driving')}
                                 >
-                                    <Text style={[localStyles.toggleText, travelMode === 'driving' && localStyles.toggleTextActive]}>
+                                    <Text style={[styles.toggleText, travelMode === 'driving' && styles.toggleTextActive]}>
                                         🚗 Car (Road)
                                     </Text>
                                 </TouchableOpacity>
 
                                 <TouchableOpacity
-                                    style={[localStyles.toggleBtn, travelMode === 'aerial' && localStyles.toggleBtnActive]}
+                                    style={[styles.toggleBtn, travelMode === 'aerial' && styles.toggleBtnActive]}
                                     onPress={() => setTravelMode('aerial')}
                                 >
-                                    <Text style={[localStyles.toggleText, travelMode === 'aerial' && localStyles.toggleTextActive]}>
+                                    <Text style={[styles.toggleText, travelMode === 'aerial' && styles.toggleTextActive]}>
                                         ✈️ Flight/Train
-                                    </Text>
-                                </TouchableOpacity>
-                            </View>
-
-                            <View style={localStyles.divider} />
-
-                            <Text style={[localStyles.cardTitle, { fontSize: 16, marginTop: 8 }]}>Alarm Mode</Text>
-                            <View style={localStyles.toggleRow}>
-                                <TouchableOpacity
-                                    style={[localStyles.toggleBtn, soundEnabled && localStyles.toggleBtnActive]}
-                                    onPress={() => setSoundEnabled(!soundEnabled)}
-                                >
-                                    <Text style={[localStyles.toggleText, soundEnabled && localStyles.toggleTextActive]}>
-                                        {soundEnabled ? '🔊 Sound: ON' : '🔇 Sound: OFF'}
-                                    </Text>
-                                </TouchableOpacity>
-
-                                <TouchableOpacity
-                                    style={[localStyles.toggleBtn, vibrationEnabled && localStyles.toggleBtnActive]}
-                                    onPress={() => setVibrationEnabled(!vibrationEnabled)}
-                                >
-                                    <Text style={[localStyles.toggleText, vibrationEnabled && localStyles.toggleTextActive]}>
-                                        {vibrationEnabled ? '📳 Vibe: ON' : '📳 Vibe: OFF'}
                                     </Text>
                                 </TouchableOpacity>
                             </View>
                         </View>
 
+                        {/* START Button */}
                         <TouchableOpacity
-                            style={[GLOBAL_STYLES.button, (!destination && { opacity: 0.5 })]}
+                            style={[globalStyles.button, (!destination && { opacity: 0.5 })]}
                             onPress={startTracking}
                             disabled={!destination || isStartingTracking}
+                            activeOpacity={0.8}
                         >
                             {isStartingTracking ? (
                                 <ActivityIndicator color="#FFF" />
                             ) : (
-                                <Text style={GLOBAL_STYLES.buttonText}>START TRACKING</Text>
+                                <Text style={globalStyles.buttonText}>START TRACKING</Text>
                             )}
                         </TouchableOpacity>
                     </View>
                 ) : (
                     <View style={{ gap: 24 }}>
-                        <View style={GLOBAL_STYLES.card}>
-                            <View style={localStyles.trackingHeader}>
-                                <View style={[localStyles.pulse, { marginRight: 10 }]} />
-                                <Text style={localStyles.trackingTitle}>LIVE TRACKING</Text>
+                        <View style={globalStyles.card}>
+                            <View style={styles.trackingHeader}>
+                                <View style={[styles.pulse, { marginRight: 10 }]} />
+                                <Text style={styles.trackingTitle}>LIVE TRACKING</Text>
                             </View>
 
-                            <Text style={localStyles.statusValue}>{statusMessage}</Text>
-                            <Text style={localStyles.statusLabel}>REMAINING</Text>
+                            <Text style={styles.statusValue}>{statusMessage}</Text>
+                            <Text style={styles.statusLabel}>REMAINING</Text>
 
-                            <SimpleProgressBar progress={getProgress()} />
+                            <SimpleProgressBar progress={getProgress()} color={colors.primary} />
 
-                            <View style={localStyles.metaRow}>
-                                <Text style={localStyles.metaText}>To: {destinationName}</Text>
-                                <Text style={localStyles.metaText}>{Math.round(getProgress() * 100)}% Trip Complete</Text>
+                            <View style={styles.metaRow}>
+                                <Text style={styles.metaText}>To: {destinationName}</Text>
+                                <Text style={styles.metaText}>{Math.round(getProgress() * 100)}% Trip Complete</Text>
                             </View>
 
                             <TouchableOpacity
-                                style={[GLOBAL_STYLES.button, { backgroundColor: COLORS.accent, marginTop: 24 }]}
+                                style={[globalStyles.button, { backgroundColor: colors.accent, marginTop: 24 }]}
                                 onPress={stopTracking}
                             >
-                                <Text style={GLOBAL_STYLES.buttonText}>STOP TRACKING</Text>
+                                <Text style={globalStyles.buttonText}>STOP TRACKING</Text>
                             </TouchableOpacity>
                         </View>
 
                         {/* Live Map View */}
                         {destination && currentLocation && (
-                            <View style={[GLOBAL_STYLES.card, localStyles.mapCard, { height: 400 }]}>
+                            <View style={[globalStyles.card, styles.mapCard, { height: 400 }]}>
                                 <MapViewer
                                     destination={destination}
                                     currentLocation={currentLocation.coords}
@@ -540,37 +553,46 @@ export default function HomeScreen() {
     );
 }
 
-const localStyles = StyleSheet.create({
-    gradientBg: {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        height: '100%',
-        zIndex: -1,
-        // Web-only gradient
-        ...Platform.select({
-            web: {
-                backgroundImage: 'linear-gradient(135deg, #6C5CE7 0%, #00CEC9 100%)',
-            }
-        })
+// ------------------- Helper Styles -------------------
+const localStyles = StyleSheet.create({ // Needed for static items
+    progressContainer: {
+        height: 12,
+        backgroundColor: 'rgba(0,0,0,0.05)',
+        borderRadius: 6,
+        overflow: 'hidden',
+        marginBottom: 16,
     },
+    progressBar: {
+        height: '100%',
+        borderRadius: 6,
+    },
+});
+
+const getLocalStyles = (colors: typeof LightColors) => StyleSheet.create({
     header: {
         padding: 20,
         paddingTop: Platform.OS === 'android' ? RNStatusBar.currentHeight! + 10 : 20,
-        alignItems: 'flex-start', // Left align like Apple Maps
+        alignItems: 'flex-start',
     },
     headerTitle: {
-        fontSize: 34, // Apple Large Title size
+        fontSize: 34,
         fontWeight: '800',
-        color: COLORS.text, // Use text color, not white (theme handles background)
-        letterSpacing: -0.5, // SF Style tight tracking
+        color: colors.text,
+        letterSpacing: -0.5,
         marginBottom: 4,
     },
     headerSubtitle: {
         fontSize: 15,
-        color: COLORS.textSecondary,
+        color: colors.textSecondary,
         fontWeight: '500',
+    },
+    menuButton: {
+        width: 44,
+        height: 44,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: colors.inputBg,
+        borderRadius: 22,
     },
     content: {
         padding: 20,
@@ -579,14 +601,13 @@ const localStyles = StyleSheet.create({
     cardTitle: {
         fontSize: 13,
         fontWeight: '700',
-        color: COLORS.textSecondary,
+        color: colors.textSecondary,
         marginBottom: 12,
-        textTransform: 'uppercase', // Apple Maps Section Header style
+        textTransform: 'uppercase',
         letterSpacing: 0.5,
     },
-    // --- New Styles for Location Card ---
     locationCard: {
-        marginBottom: 0, // Tighten spacing
+        marginBottom: 0,
     },
     locationHeader: {
         flexDirection: 'row',
@@ -596,37 +617,36 @@ const localStyles = StyleSheet.create({
     },
     refreshButton: {
         padding: 8,
-        backgroundColor: COLORS.inputBg,
+        backgroundColor: colors.inputBg,
         borderRadius: 20,
     },
     locationRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: COLORS.inputBg,
+        backgroundColor: colors.inputBg,
         borderRadius: 16,
         padding: 12,
     },
     locationText: {
         fontSize: 15,
-        color: COLORS.text,
+        color: colors.text,
         fontWeight: '600',
         flex: 1,
     },
-    // ------------------------------------
     searchContainer: {
         position: 'relative',
         marginBottom: 8,
         zIndex: 2000,
     },
     searchInput: {
-        backgroundColor: COLORS.inputBg, // Grey pill
-        borderRadius: 24, // Pill shape
+        backgroundColor: colors.inputBg,
+        borderRadius: 24,
         padding: 14,
         paddingHorizontal: 20,
         fontSize: 17,
-        color: COLORS.text,
-        borderWidth: 0, // No border for Apple look
-        ...SHADOWS, // Minimal shadow
+        color: colors.text,
+        borderWidth: 0,
+        ...SHADOWS,
     },
     searchIcon: {
         position: 'absolute',
@@ -636,17 +656,17 @@ const localStyles = StyleSheet.create({
     },
     dropdown: {
         position: 'absolute',
-        top: 68,
+        top: 60,
         left: 0,
         right: 0,
-        backgroundColor: '#FFFFFF', // Solid background for readability
+        backgroundColor: colors.card,
         borderRadius: 16,
-        zIndex: 9999, // Max z-index
+        zIndex: 9999,
         maxHeight: 250,
         borderWidth: 1,
-        borderColor: 'rgba(0,0,0,0.1)',
+        borderColor: colors.border,
         ...SHADOWS,
-        elevation: 100, // Elevation MUST be higher than the cards below it (which are 12)
+        elevation: 100,
         overflow: 'hidden',
     },
     dropdownScroll: {
@@ -657,22 +677,22 @@ const localStyles = StyleSheet.create({
         alignItems: 'center',
         padding: 16,
         borderBottomWidth: 1,
-        borderBottomColor: '#F0F0F0',
+        borderBottomColor: colors.border,
     },
     iconContainer: {
         width: 36,
         height: 36,
-        backgroundColor: '#F8F9FA',
+        backgroundColor: colors.inputBg,
         borderRadius: 18,
         alignItems: 'center',
         justifyContent: 'center',
         marginRight: 12,
-        flexShrink: 0, // Prevent icon shrinking
+        flexShrink: 0,
     },
     resultText: {
-        fontSize: 14, // Slightly smaller
-        color: '#2D3436',
-        flex: 1, // Take remaining space
+        fontSize: 14,
+        color: colors.text,
+        flex: 1,
         fontWeight: '500',
     },
     selectedContainer: {
@@ -681,14 +701,14 @@ const localStyles = StyleSheet.create({
         alignItems: 'center',
         marginTop: 12,
         padding: 16,
-        backgroundColor: COLORS.inputBg,
+        backgroundColor: colors.inputBg,
         borderRadius: 16,
         borderLeftWidth: 4,
-        borderLeftColor: COLORS.primary,
+        borderLeftColor: colors.primary,
     },
     selectedLabel: {
         fontSize: 10,
-        color: COLORS.textSecondary,
+        color: colors.textSecondary,
         fontWeight: '800',
         letterSpacing: 1,
         marginBottom: 4,
@@ -696,7 +716,7 @@ const localStyles = StyleSheet.create({
     },
     selectedText: {
         fontSize: 16,
-        color: COLORS.text,
+        color: colors.text,
         fontWeight: '700',
         maxWidth: 180,
     },
@@ -709,19 +729,19 @@ const localStyles = StyleSheet.create({
     },
     settingLabel: {
         fontSize: 11,
-        color: COLORS.textSecondary,
+        color: colors.textSecondary,
         fontWeight: '700',
         marginBottom: 8,
         textTransform: 'uppercase',
         letterSpacing: 0.5,
     },
     settingInput: {
-        backgroundColor: COLORS.inputBg,
+        backgroundColor: colors.inputBg,
         borderRadius: 16,
         padding: 16,
         fontSize: 20,
         fontWeight: '700',
-        color: COLORS.text,
+        color: colors.text,
         textAlign: 'center',
     },
     mapCard: {
@@ -739,42 +759,30 @@ const localStyles = StyleSheet.create({
     trackingTitle: {
         fontSize: 14,
         fontWeight: '800',
-        color: COLORS.success,
+        color: colors.success,
         letterSpacing: 1,
     },
     pulse: {
         width: 8,
         height: 8,
         borderRadius: 4,
-        backgroundColor: COLORS.success,
+        backgroundColor: colors.success,
     },
     statusValue: {
         fontSize: 36,
         fontWeight: '900',
-        color: COLORS.text,
+        color: colors.text,
         textAlign: 'center',
         marginVertical: 4,
         letterSpacing: -1,
     },
     statusLabel: {
         fontSize: 12,
-        color: COLORS.textSecondary,
+        color: colors.textSecondary,
         textAlign: 'center',
         marginBottom: 20,
         fontWeight: '600',
         letterSpacing: 1,
-    },
-    progressContainer: {
-        height: 12,
-        backgroundColor: COLORS.inputBg,
-        borderRadius: 6,
-        overflow: 'hidden',
-        marginBottom: 16,
-    },
-    progressBar: {
-        height: '100%',
-        backgroundColor: COLORS.primary,
-        borderRadius: 6,
     },
     metaRow: {
         flexDirection: 'row',
@@ -783,39 +791,38 @@ const localStyles = StyleSheet.create({
     },
     metaText: {
         fontSize: 13,
-        color: COLORS.textSecondary,
+        color: colors.textSecondary,
         fontWeight: '600',
     },
-    // Toggle Styles
     divider: {
         height: 1,
-        backgroundColor: COLORS.border,
+        backgroundColor: colors.border,
         marginVertical: 16,
     },
     toggleRow: {
         flexDirection: 'row',
-        gap: 12,
         marginTop: 12,
+        backgroundColor: colors.inputBg,
+        padding: 4,
+        borderRadius: 12,
     },
     toggleBtn: {
         flex: 1,
-        padding: 12,
-        borderRadius: 12,
-        backgroundColor: COLORS.inputBg,
+        paddingVertical: 10,
         alignItems: 'center',
-        borderWidth: 1,
-        borderColor: COLORS.border,
+        borderRadius: 10,
     },
     toggleBtnActive: {
-        backgroundColor: COLORS.primary,
-        borderColor: COLORS.primary,
+        backgroundColor: colors.card,
+        ...SHADOWS,
     },
     toggleText: {
-        fontSize: 14,
-        fontWeight: '700',
-        color: COLORS.text,
+        fontSize: 13,
+        fontWeight: '600',
+        color: colors.textSecondary,
     },
     toggleTextActive: {
-        color: '#fff',
+        color: colors.text,
+        fontWeight: '700',
     },
 });
