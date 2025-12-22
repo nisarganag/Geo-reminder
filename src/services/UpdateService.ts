@@ -60,10 +60,12 @@ export const UpdateService = {
     }
 
     try {
-      const fileUri = (FileSystem.documentDirectory || "") + fileName;
+      // FIX: Use manual casting for FileSystem to bypass type definition issues in legacy/mixed environments
+      const fs = FileSystem as any;
+      const fileUri = (fs.documentDirectory || "") + fileName;
 
       // 1. Download the APK
-      const downloadRes = await FileSystem.downloadAsync(url, fileUri);
+      const downloadRes = await fs.downloadAsync(url, fileUri);
 
       if (downloadRes.status !== 200) {
         Alert.alert("Download Failed", "Could not download the update.");
@@ -71,7 +73,7 @@ export const UpdateService = {
       }
 
       // 2. Get Content URI for installation (bypass FileUriExposedException)
-      const contentUri = await FileSystem.getContentUriAsync(fileUri);
+      const contentUri = await fs.getContentUriAsync(fileUri);
 
       // 3. Launch Install Intent
       await IntentLauncher.startActivityAsync("android.intent.action.VIEW", {
