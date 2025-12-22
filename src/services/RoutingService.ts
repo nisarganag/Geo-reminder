@@ -36,7 +36,9 @@ const decodePolyline = (t: string) => {
   return points;
 };
 
-const GOOGLE_API_KEY = "AIzaSyCslEV-aPV62y_yUxccMH9TTnlnJM9_7LM";
+const GOOGLE_API_KEY =
+  process.env.EXPO_PUBLIC_GOOGLE_API_KEY ||
+  "AIzaSyCslEV-aPV62y_yUxccMH9TTnlnJM9_7LM"; // Fallback only for safety, try to use env.
 
 export const RoutingService = {
   searchLocation: async (

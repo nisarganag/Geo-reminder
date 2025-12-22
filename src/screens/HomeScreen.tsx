@@ -11,6 +11,7 @@ import { NotificationService } from '../services/NotificationService';
 import { LocationCoords, SearchResult, RouteInfo, ReminderSettings } from '../types';
 import { LocationObject } from 'expo-location';
 import { LightColors, DarkColors, getGlobalStyles, SHADOWS } from '../theme';
+import { AlarmService } from '../services/AlarmService';
 
 const STORAGE_KEY = 'GEO_REMINDER_SETTINGS';
 
@@ -58,6 +59,7 @@ export default function HomeScreen() {
     const [routeInfo, setRouteInfo] = useState<RouteInfo | null>(null);
     const [statusMessage, setStatusMessage] = useState('Ready to start');
     const [initialDistance, setInitialDistance] = useState<number | null>(null);
+    const [isAlarmActive, setIsAlarmActive] = useState(false);
 
     const locationSubscription = useRef<any>(null);
     const lastNotificationTime = useRef<number>(0);
@@ -282,8 +284,17 @@ export default function HomeScreen() {
             await locationSubscription.current.remove();
             locationSubscription.current = null;
         }
+        await AlarmService.stopAlarm();
+        setIsAlarmActive(false);
         setIsTracking(false);
         setStatusMessage('Tracking stopped');
+    };
+
+    const stopAlarm = async () => {
+        await AlarmService.stopAlarm();
+        setIsAlarmActive(false);
+        setIsTracking(false); // Optionally stop tracking or let them continue? usually stop.
+        setStatusMessage('Arrived');
     };
 
     const checkProximity = async (userCoords: LocationCoords) => {
@@ -342,16 +353,25 @@ export default function HomeScreen() {
 
             if (distTrigger || timeTrigger) {
                 const timeDiff = now - lastNotificationTime.current;
-                // Don't spam notifications (limit to once every 5 mins)
-                if (timeDiff > 5 * 60 * 1000) {
-                    const triggerType = distTrigger ? 'Distance' : 'Time';
-                    const msg = `You are ${remainingKm.toFixed(1)}km and ${remainingMins.toFixed(0)}min away from ${destinationName}`;
 
-                    await NotificationService.scheduleNotification(`Arriving Soon! (${triggerType})`, msg, soundEnabled);
-                    if (Platform.OS === 'web') {
-                        window.alert(`REMINDER: ${msg}`);
+                // If extremely close (e.g. < 500m or < 1 min), TRIGGER ALARM
+                const isFinalApproach = remainingKm < 0.5 || remainingMins < 1;
+
+                if (isFinalApproach) {
+                    if (!isAlarmActive) {
+                        setIsAlarmActive(true);
+                        AlarmService.startAlarm(); // Loops sound/vibration
                     }
-                    lastNotificationTime.current = now;
+                } else {
+                    // Standard Notification (Pre-alert)
+                    // Don't spam notifications (limit to once every 5 mins)
+                    if (timeDiff > 5 * 60 * 1000) {
+                        const triggerType = distTrigger ? 'Distance' : 'Time';
+                        const msg = `You are ${remainingKm.toFixed(1)}km and ${remainingMins.toFixed(0)}min away from ${destinationName}`;
+
+                        await NotificationService.scheduleNotification(`Arriving Soon! (${triggerType})`, msg, soundEnabled);
+                        lastNotificationTime.current = now;
+                    }
                 }
             }
         }
@@ -366,6 +386,23 @@ export default function HomeScreen() {
 
     return (
         <SafeAreaView style={globalStyles.container}>
+            {/* ALARM OVERLAY */}
+            {isAlarmActive && (
+                <View style={[StyleSheet.absoluteFill, { backgroundColor: '#FF3B30', zIndex: 10000, justifyContent: 'center', alignItems: 'center', padding: 20 }]}>
+                    <View style={{ marginBottom: 40, alignItems: 'center' }}>
+                        <Ionicons name="notifications-circle" size={120} color="#FFF" />
+                        <Text style={{ fontSize: 42, fontWeight: '900', color: '#FFF', textAlign: 'center', marginTop: 20 }}>ARRIVED!</Text>
+                        <Text style={{ fontSize: 24, fontWeight: '600', color: 'rgba(255,255,255,0.8)', textAlign: 'center', marginTop: 10 }}>{destinationName}</Text>
+                    </View>
+
+                    <TouchableOpacity
+                        onPress={stopAlarm}
+                        style={{ backgroundColor: '#FFF', paddingVertical: 24, paddingHorizontal: 48, borderRadius: 40, elevation: 10, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 20, shadowOffset: { width: 0, height: 10 } }}>
+                        <Text style={{ fontSize: 24, fontWeight: '900', color: '#FF3B30', letterSpacing: 1 }}>STOP ALARM</Text>
+                    </TouchableOpacity>
+                </View>
+            )}
+
             <View style={styles.header}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
                     <View>
