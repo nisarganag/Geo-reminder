@@ -1,57 +1,57 @@
 import { StyleSheet, Platform } from "react-native";
 
 export const COLORS = {
-  // Vibrant Gradient Elements
-  primary: "#6C5CE7",
-  secondary: "#00CEC9", // Bright Teal
-  accent: "#FF7675", // Coral
-  background: "#0984e3", // Fallback for native
-  text: "#2D3436",
+  // Apple Maps Style Palette
+  primary: "#007AFF", // System Blue
+  secondary: "#5AC8FA", // System Teal
+  accent: "#FF3B30", // System Red (Destructive/Cancel)
+  background: "#F2F2F7", // System Grouped Background (Light Grey)
+
+  text: "#000000",
+  textSecondary: "#8E8E93", // System Grey
   textLight: "#FFFFFF",
-  textSecondary: "#636E72",
 
-  // Glassmorphism variants
-  glassBg: "rgba(255, 255, 255, 0.75)",
-  glassBorder: "rgba(255, 255, 255, 0.6)",
-
-  // Legacy/Fallback keys to satisfy types
+  // Components
   card: "#FFFFFF",
-  border: "rgba(255, 255, 255, 0.4)",
+  inputBg: "#E5E5EA", // Search bar grey
+  border: "rgba(0, 0, 0, 0.05)",
 
-  success: "#00B894",
-  warning: "#FD79A8",
-  inputBg: "rgba(255, 255, 255, 0.9)",
+  success: "#34C759", // System Green
+  warning: "#FFCC00",
+
+  // Glass/Blur overlays
+  glassBg: "rgba(255, 255, 255, 0.8)",
+  glassBorder: "rgba(255, 255, 255, 0.4)",
 };
 
 export const SHADOWS = Platform.select({
   ios: {
-    shadowColor: "#2D3436",
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.15,
-    shadowRadius: 24,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
   },
   android: {
-    elevation: 12,
+    elevation: 8,
   },
   web: {
-    boxShadow:
-      "0 15px 35px rgba(50, 50, 93, 0.1), 0 5px 15px rgba(0, 0, 0, 0.07)",
+    boxShadow: "0 8px 24px rgba(0,0,0,0.08)",
   },
 });
 
 export const GLASS_STYLE = Platform.select({
   web: {
-    backdropFilter: "blur(16px)",
-    WebkitBackdropFilter: "blur(16px)",
-    backgroundColor: COLORS.glassBg,
-    borderColor: COLORS.glassBorder,
+    backdropFilter: "blur(20px)",
+    WebkitBackdropFilter: "blur(20px)",
+    backgroundColor: "rgba(255, 255, 255, 0.85)",
     borderWidth: 1,
-    borderStyle: "solid",
+    borderColor: "rgba(255, 255, 255, 0.5)",
   },
   default: {
-    backgroundColor: "rgba(255,255,255, 0.95)",
+    // Native fallback (since true blur is hard on Android without extra libs)
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#EEF2F7",
+    borderColor: "rgba(0,0,0,0.05)",
   },
 });
 

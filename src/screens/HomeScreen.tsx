@@ -323,8 +323,13 @@ export default function HomeScreen() {
                     <View style={{ gap: 24 }}>
                         {/* Your Location Card */}
                         <View style={[GLOBAL_STYLES.card, localStyles.locationCard]}>
+                            {/* Sheet Handle */}
+                            <View style={{ alignItems: 'center', marginBottom: 16 }}>
+                                <View style={{ width: 40, height: 5, borderRadius: 3, backgroundColor: '#E5E5EA' }} />
+                            </View>
+
                             <View style={localStyles.locationHeader}>
-                                <Text style={localStyles.cardTitle}>Your Location</Text>
+                                <Text style={localStyles.cardTitle}>MY LOCATION</Text>
                                 <TouchableOpacity onPress={refreshLocation} style={localStyles.refreshButton}>
                                     <Text style={{ fontSize: 18 }}>🔄</Text>
                                 </TouchableOpacity>
@@ -551,34 +556,33 @@ const localStyles = StyleSheet.create({
         })
     },
     header: {
-        padding: 24,
-        paddingTop: Platform.OS === 'android' ? RNStatusBar.currentHeight! + 24 : 32,
-        alignItems: 'center',
+        padding: 20,
+        paddingTop: Platform.OS === 'android' ? RNStatusBar.currentHeight! + 10 : 20,
+        alignItems: 'flex-start', // Left align like Apple Maps
     },
     headerTitle: {
-        fontSize: 28,
-        fontWeight: '900',
-        color: '#fff', // White text on gradient
-        letterSpacing: 1,
-        textShadowColor: 'rgba(0,0,0,0.2)',
-        textShadowOffset: { width: 0, height: 2 },
-        textShadowRadius: 4,
+        fontSize: 34, // Apple Large Title size
+        fontWeight: '800',
+        color: COLORS.text, // Use text color, not white (theme handles background)
+        letterSpacing: -0.5, // SF Style tight tracking
+        marginBottom: 4,
     },
     headerSubtitle: {
         fontSize: 15,
-        color: 'rgba(255,255,255,0.9)',
+        color: COLORS.textSecondary,
         fontWeight: '500',
-        marginTop: 4,
     },
     content: {
         padding: 20,
         paddingBottom: 60,
     },
     cardTitle: {
-        fontSize: 18,
-        fontWeight: '800',
-        color: COLORS.text,
-        marginBottom: 16,
+        fontSize: 13,
+        fontWeight: '700',
+        color: COLORS.textSecondary,
+        marginBottom: 12,
+        textTransform: 'uppercase', // Apple Maps Section Header style
+        letterSpacing: 0.5,
     },
     // --- New Styles for Location Card ---
     locationCard: {
@@ -615,16 +619,14 @@ const localStyles = StyleSheet.create({
         zIndex: 2000,
     },
     searchInput: {
-        backgroundColor: '#FFFFFF', // Solid white for visibility
-        borderRadius: 16,
-        padding: 16,
-        paddingRight: 40,
-        fontSize: 16,
-        color: '#2D3436', // Dark text
-        borderWidth: 1,
-        borderColor: 'rgba(0,0,0,0.1)',
-        ...SHADOWS,
-        elevation: 5, // Higher elevation
+        backgroundColor: COLORS.inputBg, // Grey pill
+        borderRadius: 24, // Pill shape
+        padding: 14,
+        paddingHorizontal: 20,
+        fontSize: 17,
+        color: COLORS.text,
+        borderWidth: 0, // No border for Apple look
+        ...SHADOWS, // Minimal shadow
     },
     searchIcon: {
         position: 'absolute',
