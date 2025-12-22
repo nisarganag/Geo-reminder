@@ -34,7 +34,7 @@ jobs:
         run: npx expo prebuild --platform android
 
       - name: Debug - Manual Bundle Check
-        run: npx expo export --platform android --dump-sourcemap --dev false
+        run: npx expo export --platform android --dump-sourcemap
         continue-on-error: true
 
       - name: Clean Build Cache
