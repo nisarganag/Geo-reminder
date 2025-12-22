@@ -661,7 +661,7 @@ const getLocalStyles = (colors: typeof LightColors) => StyleSheet.create({
     },
     dropdown: {
         position: 'absolute',
-        top: 86, // Increased to clear input
+        top: 110, // Increased to clear input
         left: 0,
         right: 0,
         backgroundColor: colors.card,
