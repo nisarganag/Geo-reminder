@@ -1,4 +1,5 @@
 import * as Location from "expo-location";
+import * as Battery from "expo-battery";
 
 export const LocationService = {
   requestPermissions: async (): Promise<boolean> => {
@@ -23,14 +24,32 @@ export const LocationService = {
     }
   },
 
+  // ... (existing code)
+
   watchLocation: async (
     callback: (location: Location.LocationObject) => void
   ) => {
+    let accuracy = Location.Accuracy.High;
+    let timeInterval = 5000;
+    let distanceInterval = 10;
+
+    try {
+      const level = await Battery.getBatteryLevelAsync();
+      if (level > 0 && level < 0.2) {
+        console.log("Low Battery Mode Active: Reducing GPS Polling");
+        accuracy = Location.Accuracy.Balanced;
+        timeInterval = 30000; // 30s
+        distanceInterval = 50; // 50m
+      }
+    } catch (e) {
+      // Ignore battery check errors
+    }
+
     return await Location.watchPositionAsync(
       {
-        accuracy: Location.Accuracy.High,
-        timeInterval: 5000,
-        distanceInterval: 10,
+        accuracy,
+        timeInterval,
+        distanceInterval,
       },
       callback
     );

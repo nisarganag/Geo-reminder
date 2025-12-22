@@ -2,10 +2,17 @@ import { Audio } from "expo-av";
 import { Vibration, Platform } from "react-native";
 
 class AlarmServiceImpl {
-  private soundObject: Audio.Sound | null = null;
+  private sound: Audio.Sound | null = null;
+  private customSoundUri: string | null = null;
   private isPlaying: boolean = false;
   private vibrationInterval: NodeJS.Timeout | null = null;
 
+  async setCustomSound(uri: string | null) {
+    this.customSoundUri = uri;
+  }
+
+  // The loadSound method is now primarily for setting audio mode,
+  // actual sound loading will happen in startAlarm based on custom URI or default.
   async loadSound() {
     try {
       await Audio.setAudioModeAsync({
@@ -15,27 +22,8 @@ class AlarmServiceImpl {
         shouldDuckAndroid: true,
         playThroughEarpieceAndroid: false,
       });
-
-      // Default system alarm sound is tricky to access directly across platforms without native modules.
-      // We will use a standard beep sound via URL or a bundled asset ideally.
-      // For now, let's try to generate a beep or use a known reliable URL.
-      // Since we don't have a local asset, we'll try to just use Vibration strongly first,
-      // but the user requested SOUND.
-
-      // We will create a sound object but without a file, it won't work well offline.
-      // Best approach for an MVP without assets: Use expo-av with a remote URL fallback
-      // or rely on the fact we can't easily ship a sound file without user adding it.
-      // LET'S USE A PUBLIC RELIABLE URL FOR A BEEP/ALARM for the prototype.
-
-      const { sound } = await Audio.Sound.createAsync(
-        {
-          uri: "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3",
-        }, // Loud Alarm Clock style
-        { shouldPlay: false, isLooping: true }
-      );
-      this.soundObject = sound;
     } catch (error) {
-      console.log("Error loading alarm sound", error);
+      console.log("Error setting audio mode", error);
     }
   }
 
@@ -49,12 +37,12 @@ class AlarmServiceImpl {
     // 1. Start Audio (if enabled)
     if (soundEnabled) {
       try {
-        if (!this.soundObject) {
+        if (!this.sound) {
           await this.loadSound();
         }
-        if (this.soundObject) {
-          await this.soundObject.setVolumeAsync(1.0);
-          await this.soundObject.playAsync();
+        if (this.sound) {
+          await this.sound.setVolumeAsync(1.0);
+          await this.sound.playAsync();
         }
       } catch (e) {
         console.log("Failed to play sound", e);
@@ -84,9 +72,9 @@ class AlarmServiceImpl {
     this.isPlaying = false;
 
     // Stop Sound
-    if (this.soundObject) {
+    if (this.sound) {
       try {
-        await this.soundObject.stopAsync();
+        await this.sound.stopAsync();
       } catch (e) {
         console.log(e);
       }

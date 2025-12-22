@@ -12,11 +12,14 @@ interface SidebarProps {
     toggleSound: () => void;
     vibrationEnabled: boolean;
     toggleVibration: () => void;
+    customSoundName?: string | null;
+    onPickSound?: () => void;
 }
 
 export default function Sidebar({
     isVisible, onClose, isDark, toggleTheme,
-    soundEnabled, toggleSound, vibrationEnabled, toggleVibration
+    soundEnabled, toggleSound, vibrationEnabled, toggleVibration,
+    customSoundName, onPickSound
 }: SidebarProps) {
     const colors = isDark ? DarkColors : LightColors;
     const [isChecking, setIsChecking] = useState(false);
@@ -103,6 +106,20 @@ export default function Sidebar({
                                 trackColor={{ false: '#767577', true: colors.primary }}
                             />
                         </View>
+
+                        {/* CUSTOM SOUND */}
+                        <TouchableOpacity
+                            style={[styles.row, { borderBottomWidth: 0, marginTop: 8 }]}
+                            onPress={onPickSound}
+                        >
+                            <View>
+                                <Text style={[styles.label, { color: colors.text }]}>Alarm Sound</Text>
+                                <Text style={{ fontSize: 12, color: colors.textSecondary }}>
+                                    {customSoundName || 'Default Siren'}
+                                </Text>
+                            </View>
+                            <Text style={{ color: colors.primary, fontWeight: '600' }}>EDIT</Text>
+                        </TouchableOpacity>
 
                         {/* ABOUT */}
                         <Text style={[styles.sectionTitle, { color: colors.textSecondary, marginTop: 24 }]}>ABOUT</Text>

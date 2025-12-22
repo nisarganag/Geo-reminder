@@ -15,6 +15,14 @@ export interface RouteInfo {
   geometry?: any[]; // GeoJSON coordinates or Polyline points [[lat,lon],...]
 }
 
+export interface FavoriteLocation {
+  id: string;
+  label: string;
+  icon: string; // 'home', 'work', 'heart', etc.
+  coords: LocationCoords;
+  address: string;
+}
+
 export interface ReminderSettings {
   destination: LocationCoords | null;
   destinationName: string;
@@ -24,4 +32,6 @@ export interface ReminderSettings {
   soundEnabled: boolean;
   vibrationEnabled: boolean;
   history?: SearchResult[];
+  favorites?: FavoriteLocation[];
+  customSoundUri?: string | null;
 }

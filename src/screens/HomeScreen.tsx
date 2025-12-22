@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TextInput, StyleSheet, Alert, Platform, ScrollView, TouchableOpacity, SafeAreaView, StatusBar as RNStatusBar, ActivityIndicator, Animated, Easing } from 'react-native';
+import { View, Text, TextInput, StyleSheet, Alert, Platform, ScrollView, TouchableOpacity, SafeAreaView, StatusBar as RNStatusBar, ActivityIndicator, Animated, Easing, Share } from 'react-native';
+import * as DocumentPicker from 'expo-document-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import MapViewer from '../components/MapViewer';
@@ -8,7 +9,7 @@ import Sidebar from '../components/Sidebar';
 import { LocationService } from '../services/LocationService';
 import { RoutingService } from '../services/RoutingService';
 import { NotificationService } from '../services/NotificationService';
-import { LocationCoords, SearchResult, RouteInfo, ReminderSettings } from '../types';
+import { LocationCoords, SearchResult, RouteInfo, ReminderSettings, FavoriteLocation } from '../types';
 import { LocationObject } from 'expo-location';
 import { LightColors, DarkColors, getGlobalStyles, SHADOWS } from '../theme';
 import { AlarmService } from '../services/AlarmService';
@@ -61,7 +62,37 @@ export default function HomeScreen() {
     const [initialDistance, setInitialDistance] = useState<number | null>(null);
     const [isAlarmActive, setIsAlarmActive] = useState(false);
     const [searchHistory, setSearchHistory] = useState<SearchResult[]>([]);
+    const [favorites, setFavorites] = useState<FavoriteLocation[]>([]);
     const [snoozeUntil, setSnoozeUntil] = useState<number>(0);
+    const [customSoundUri, setCustomSoundUri] = useState<string | null>(null);
+    const [customSoundName, setCustomSoundName] = useState<string | null>(null);
+
+    const pickSound = async () => {
+        try {
+            const result = await DocumentPicker.getDocumentAsync({ type: 'audio/*' });
+            if (!result.canceled && result.assets && result.assets[0]) {
+                const asset = result.assets[0];
+                setCustomSoundUri(asset.uri);
+                setCustomSoundName(asset.name);
+                await AlarmService.setCustomSound(asset.uri); // We need to add this to AlarmService
+            }
+        } catch (e) {
+            Alert.alert('Error picking sound');
+        }
+    };
+
+    const shareTrip = async () => {
+        if (!routeInfo || !destination) return;
+        const eta = (routeInfo.duration / 60).toFixed(0);
+        const dist = (routeInfo.distance / 1000).toFixed(1);
+        try {
+            await Share.share({
+                message: `I'm on my way to ${destinationName}. \n📍 Current Distance: ${dist} km \n⏱️ ETA: ${eta} mins \n\nSent from Geo-Reminder app.`,
+            });
+        } catch (error) {
+            console.log(error);
+        }
+    };
 
     const locationSubscription = useRef<any>(null);
     const lastNotificationTime = useRef<number>(0);
@@ -173,6 +204,7 @@ export default function HomeScreen() {
                 vibrationEnabled,
                 isDark,
                 history: searchHistory, // Save History
+                favorites: favorites,   // Save Favorites
             };
             await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
         } catch (e) {
@@ -201,6 +233,57 @@ export default function HomeScreen() {
     const clearSelection = () => {
         setDestination(null);
         setDestinationName('');
+        setSearchResults([]);
+        setQuery('');
+    };
+
+    const toggleFavorite = () => {
+        if (!destination) return;
+
+        // Check if already favorite (by coordinates close enough)
+        const existingIndex = favorites.findIndex(f =>
+            Math.abs(f.coords.latitude - destination.latitude) < 0.0001 &&
+            Math.abs(f.coords.longitude - destination.longitude) < 0.0001
+        );
+
+        if (existingIndex >= 0) {
+            // Remove
+            const newFavs = [...favorites];
+            newFavs.splice(existingIndex, 1);
+            setFavorites(newFavs);
+        } else {
+            // Add
+            Alert.prompt(
+                "Save Favorite",
+                "Enter a label (e.g., Home, Work)",
+                [
+                    { text: "Cancel", style: "cancel" },
+                    {
+                        text: "Save",
+                        onPress: (label) => {
+                            const newFav = {
+                                id: Date.now().toString(),
+                                label: label || destinationName,
+                                icon: 'hearts', // Default, could be smart
+                                coords: destination,
+                                address: destinationName
+                            };
+                            setFavorites([...favorites, newFav]);
+                        }
+                    }
+                ],
+                "plain-text",
+                destinationName // Default value
+            );
+        }
+    };
+
+    // Auto-Save whenever favorites change
+    useEffect(() => { saveSettings(); }, [favorites]);
+
+    const selectFavorite = (fav: FavoriteLocation) => {
+        setDestination(fav.coords);
+        setDestinationName(fav.label);
         setSearchResults([]);
         setQuery('');
     };
@@ -462,6 +545,8 @@ export default function HomeScreen() {
                 toggleSound={() => setSoundEnabled(!soundEnabled)}
                 vibrationEnabled={vibrationEnabled}
                 toggleVibration={() => setVibrationEnabled(!vibrationEnabled)}
+                customSoundName={customSoundName}
+                onPickSound={pickSound}
             />
 
             <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
@@ -541,39 +626,69 @@ export default function HomeScreen() {
                                 </View>
                             )}
 
-                            {/* HISTORY DROPDOWN (When focused but no query) */}
-                            {!query && searchHistory.length > 0 && !destination && (
-                                <View style={{ marginTop: 16 }}>
-                                    <Text style={styles.cardTitle}>RECENT</Text>
-                                    <ScrollView style={{ maxHeight: 200 }} keyboardShouldPersistTaps="handled">
-                                        {searchHistory.map((item, index) => (
-                                            <TouchableOpacity
-                                                key={`hist-${index}`}
-                                                onPress={() => selectDestination(item)}
-                                                style={[styles.dropdownItem, { paddingLeft: 0, borderBottomWidth: 0.5 }]}
-                                            >
-                                                <View style={[styles.iconContainer, { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border }]}>
-                                                    <Text>🕒</Text>
-                                                </View>
-                                                <Text style={styles.resultText} numberOfLines={1}>{item.display_name}</Text>
-                                            </TouchableOpacity>
-                                        ))}
-                                    </ScrollView>
-                                </View>
-                            )}
-
-                            {destination && !query && (
-                                <View style={styles.selectedContainer}>
-                                    <View>
-                                        <Text style={styles.selectedLabel}>SELECTED DESTINATION</Text>
-                                        <Text style={styles.selectedText} numberOfLines={1}>{destinationName}</Text>
-                                    </View>
-                                    <TouchableOpacity onPress={clearSelection}>
-                                        <Text style={{ color: colors.accent, fontWeight: '700' }}>CHANGE</Text>
-                                    </TouchableOpacity>
-                                </View>
-                            )}
                         </View>
+
+
+                        {/* FAVORITES LIST */}
+                        {!query && favorites.length > 0 && !destination && (
+                            <View style={{ marginTop: 0, marginBottom: 16 }}>
+                                <Text style={styles.cardTitle}>FAVORITES</Text>
+                                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -4 }}>
+                                    {favorites.map((fav) => (
+                                        <TouchableOpacity
+                                            key={fav.id}
+                                            onPress={() => selectFavorite(fav)}
+                                            style={{ alignItems: 'center', marginRight: 16, width: 70 }}
+                                        >
+                                            <View style={{
+                                                width: 50, height: 50, borderRadius: 25,
+                                                backgroundColor: colors.primary + '20',
+                                                alignItems: 'center', justifyContent: 'center',
+                                                marginBottom: 8
+                                            }}>
+                                                <Text style={{ fontSize: 24 }}>❤️</Text>
+                                            </View>
+                                            <Text style={{ fontSize: 12, fontWeight: '600', color: colors.text, textAlign: 'center' }} numberOfLines={1}>
+                                                {fav.label}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    ))}
+                                </ScrollView>
+                            </View>
+                        )}
+
+                        {/* HISTORY DROPDOWN (When focused but no query) */}
+                        {!query && searchHistory.length > 0 && !destination && (
+                            <View style={{ marginTop: 16 }}>
+                                <Text style={styles.cardTitle}>RECENT</Text>
+                                <ScrollView style={{ maxHeight: 200 }} keyboardShouldPersistTaps="handled">
+                                    {searchHistory.map((item, index) => (
+                                        <TouchableOpacity
+                                            key={`hist-${index}`}
+                                            onPress={() => selectDestination(item)}
+                                            style={[styles.dropdownItem, { paddingLeft: 0, borderBottomWidth: 0.5 }]}
+                                        >
+                                            <View style={[styles.iconContainer, { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border }]}>
+                                                <Text>🕒</Text>
+                                            </View>
+                                            <Text style={styles.resultText} numberOfLines={1}>{item.display_name}</Text>
+                                        </TouchableOpacity>
+                                    ))}
+                                </ScrollView>
+                            </View>
+                        )}
+
+                        {destination && !query && (
+                            <View style={styles.selectedContainer}>
+                                <View>
+                                    <Text style={styles.selectedLabel}>SELECTED DESTINATION</Text>
+                                    <Text style={styles.selectedText} numberOfLines={1}>{destinationName}</Text>
+                                </View>
+                                <TouchableOpacity onPress={clearSelection}>
+                                    <Text style={{ color: colors.accent, fontWeight: '700' }}>CHANGE</Text>
+                                </TouchableOpacity>
+                            </View>
+                        )}
 
                         {/* Map Preview */}
                         {destination && (
@@ -683,6 +798,13 @@ export default function HomeScreen() {
                                 onPress={stopTracking}
                             >
                                 <Text style={globalStyles.buttonText}>STOP TRACKING</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                style={[globalStyles.button, { backgroundColor: colors.card, marginTop: 12, borderWidth: 1, borderColor: colors.border }]}
+                                onPress={shareTrip}
+                            >
+                                <Text style={[globalStyles.buttonText, { color: colors.text }]}>📤 SHARE TRIP STATUS</Text>
                             </TouchableOpacity>
                         </View>
 
