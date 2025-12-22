@@ -100,6 +100,7 @@ export default function HomeScreen() {
     const locationSubscription = useRef<any>(null);
     const lastNotificationTime = useRef<number>(0);
     const searchTimeout = useRef<NodeJS.Timeout | null>(null);
+    const hasTriggeredAlarm = useRef<boolean>(false); // BUG FIX: Prevent re-trigger
 
     // API Throttling Refs
     const lastApiCallTime = useRef<number>(0);
@@ -201,6 +202,12 @@ export default function HomeScreen() {
                     setTimeThreshold(settings.timeThreshold.toString());
                     setSoundEnabled(settings.soundEnabled ?? true);
                     setVibrationEnabled(settings.vibrationEnabled ?? true);
+                    // BUG FIX: Restore Custom Sound
+                    if (settings.customSoundUri) {
+                        setCustomSoundUri(settings.customSoundUri);
+                        setCustomSoundName(settings.customSoundUri.split('/').pop() || 'Custom Sound'); // Simple name fallback
+                        AlarmService.setCustomSound(settings.customSoundUri);
+                    }
                 }
             }
         } catch (e) {
@@ -221,6 +228,7 @@ export default function HomeScreen() {
                 isDark,
                 history: searchHistory, // Save History
                 favorites: favorites,   // Save Favorites
+                customSoundUri: customSoundUri // BUG FIX: Save Custom Sound
             };
             await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
         } catch (e) {
@@ -313,6 +321,7 @@ export default function HomeScreen() {
         }
 
         setIsStartingTracking(true);
+        hasTriggeredAlarm.current = false; // Reset trigger guard
 
         try {
             const startLoc = await LocationService.getCurrentLocation();
@@ -400,6 +409,7 @@ export default function HomeScreen() {
             await locationSubscription.current.remove();
             locationSubscription.current = null;
         }
+        hasTriggeredAlarm.current = false; // Reset trigger guard on stop
         await AlarmService.stopAlarm();
         setIsAlarmActive(false);
         setIsTracking(false);
@@ -485,7 +495,8 @@ export default function HomeScreen() {
                 const isFinalApproach = remainingKm < 0.5 || remainingMins < 1;
 
                 if (isFinalApproach) {
-                    if (!isAlarmActive) {
+                    if (!isAlarmActive && !hasTriggeredAlarm.current) {
+                        hasTriggeredAlarm.current = true; // Mark as triggered
                         setIsAlarmActive(true);
                         AlarmService.startAlarm(soundEnabled, vibrationEnabled); // Respects user settings
                     }

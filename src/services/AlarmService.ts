@@ -37,9 +37,46 @@ class AlarmServiceImpl {
     // 1. Start Audio (if enabled)
     if (soundEnabled) {
       try {
-        if (!this.sound) {
-          await this.loadSound();
+        // ALWAYS set mode before playing to ensure focus
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: false,
+          staysActiveInBackground: true,
+          playsInSilentModeIOS: true,
+          shouldDuckAndroid: true,
+          playThroughEarpieceAndroid: false,
+        });
+
+        // Unload existing sound to be safe
+        if (this.sound) {
+          await this.sound.unloadAsync();
+          this.sound = null;
         }
+
+        if (this.customSoundUri) {
+          try {
+            const { sound } = await Audio.Sound.createAsync(
+              { uri: this.customSoundUri },
+              { shouldPlay: true, isLooping: true }
+            );
+            this.sound = sound;
+          } catch (e) {
+            console.log("Custom sound failed, falling back to default");
+            // Fallback handled below
+          }
+        }
+
+        // Default sound if custom failed or not set
+        if (!this.sound) {
+          const { sound } = await Audio.Sound.createAsync(
+            {
+              uri: "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3",
+            },
+            { shouldPlay: true, isLooping: true }
+          );
+          this.sound = sound;
+        }
+
+        // Just in case createAsync didn't play (though shouldPlay: true is set)
         if (this.sound) {
           await this.sound.setVolumeAsync(1.0);
           await this.sound.playAsync();
@@ -75,6 +112,8 @@ class AlarmServiceImpl {
     if (this.sound) {
       try {
         await this.sound.stopAsync();
+        await this.sound.unloadAsync(); // Vital: Release resource
+        this.sound = null;
       } catch (e) {
         console.log(e);
       }
