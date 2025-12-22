@@ -33,6 +33,10 @@ jobs:
       - name: Prebuild (Expo)
         run: npx expo prebuild --platform android
 
+      - name: Clean Build Cache
+        working-directory: android
+        run: ./gradlew clean
+
       - name: Build APK with Gradle
         working-directory: android
         run: ./gradlew assembleRelease --stacktrace --info
