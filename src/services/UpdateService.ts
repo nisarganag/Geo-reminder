@@ -25,22 +25,30 @@ export const UpdateService = {
       }
 
       const data = await response.json();
-      const latestVersionTag = data.tag_name.replace(/^v/, ""); // Remove 'v' prefix if present
-      const currentVersion = Application.nativeApplicationVersion || "1.0.0";
+      const latestVersionTag = data.tag_name.replace(/^v/, ""); // "17"
+
+      // Use nativeBuildVersion (Android Version Code) which we map to GitHub Run Number
+      // Fallback to "0" if undefined (dev mode)
+      const currentBuildVersion = Application.nativeBuildVersion || "0";
+
       const apkAsset = data.assets.find((asset: any) =>
         asset.name.endsWith(".apk")
       );
 
-      console.log(`Current: ${currentVersion}, Latest: ${latestVersionTag}`);
+      console.log(
+        `Current Code: ${currentBuildVersion}, Latest Tag: ${latestVersionTag}`
+      );
 
-      // Simple version comparison (string match or basic number check)
-      // In a real app, use semver logic. Here we assume simpler incrementing or mismatch means update.
-      if (latestVersionTag !== currentVersion && apkAsset) {
-        return {
-          hasUpdate: true,
-          downloadUrl: apkAsset.browser_download_url,
-          latestVersion: latestVersionTag,
-        };
+      // Compare Build Numbers (Integers)
+      // If Tag (17) > Current (16), update.
+      if (parseInt(latestVersionTag) > parseInt(currentBuildVersion)) {
+        if (apkAsset) {
+          return {
+            hasUpdate: true,
+            downloadUrl: apkAsset.browser_download_url,
+            latestVersion: latestVersionTag,
+          };
+        }
       }
 
       return { hasUpdate: false };
@@ -81,11 +89,27 @@ export const UpdateService = {
         flags: 1, // FLAG_GRANT_READ_URI_PERMISSION
         type: "application/vnd.android.package-archive",
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Update installation failed:", error);
+
+      // Check if it's a permission issue or offer to open settings
       Alert.alert(
-        "Install Error",
-        "Failed to initiate installation. Please ensure you have granted permission to install unknown apps."
+        "Install Permission Required",
+        "To update the app, you need to allow installing unknown apps. Would you like to open settings?",
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Open Settings",
+            onPress: () => {
+              IntentLauncher.startActivityAsync(
+                "android.settings.MANAGE_UNKNOWN_APP_SOURCES",
+                {
+                  data: `package:${Application.applicationId}`,
+                }
+              );
+            },
+          },
+        ]
       );
     }
   },

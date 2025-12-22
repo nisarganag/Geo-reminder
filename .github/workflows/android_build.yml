@@ -32,6 +32,13 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Set Version Code
+        run: |
+          sed -i 's/"versionCode": [0-9]*/"versionCode": ${{ github.run_number }}/' app.json || true
+          # Also try to inject if missing (this regex is fragile but works for formatted json)
+          # Alternatively, use a safer Node script:
+          node -e "const fs=require('fs'); const pkg=JSON.parse(fs.readFileSync('app.json')); if(!pkg.expo.android) pkg.expo.android={}; pkg.expo.android.versionCode=${{ github.run_number }}; fs.writeFileSync('app.json', JSON.stringify(pkg,null,2));"
+
       - name: Prebuild (Expo)
         run: npx expo prebuild --platform android
 
