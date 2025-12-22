@@ -36,6 +36,9 @@ export default function HomeScreen() {
     const [soundEnabled, setSoundEnabled] = useState(true);
     const [vibrationEnabled, setVibrationEnabled] = useState(true);
 
+    // New Mode State
+    const [travelMode, setTravelMode] = useState<'driving' | 'aerial'>('driving');
+
     const [isTracking, setIsTracking] = useState(false);
     const [currentLocation, setCurrentLocation] = useState<LocationObject | null>(null);
     const [routeInfo, setRouteInfo] = useState<RouteInfo | null>(null);
@@ -179,7 +182,7 @@ export default function HomeScreen() {
             return;
         }
 
-        const info = await RoutingService.getRouteDetails(startLoc.coords, destination);
+        const info = await RoutingService.getRouteDetails(startLoc.coords, destination, travelMode);
         if (info) {
             const distKm = info.distance / 1000;
             const timeMin = info.duration / 60;
@@ -249,7 +252,7 @@ export default function HomeScreen() {
     const checkProximity = async (userCoords: LocationCoords) => {
         if (!destination) return;
 
-        const info = await RoutingService.getRouteDetails(userCoords, destination);
+        const info = await RoutingService.getRouteDetails(userCoords, destination, travelMode);
         if (info) {
             setRouteInfo(info);
             // If initial was never set (e.g. route failed at start but works now), set it
@@ -416,6 +419,29 @@ export default function HomeScreen() {
                                         keyboardType="numeric"
                                     />
                                 </View>
+                            </View>
+
+                            <View style={localStyles.divider} />
+
+                            <Text style={[localStyles.cardTitle, { fontSize: 16 }]}>Travel Mode</Text>
+                            <View style={localStyles.toggleRow}>
+                                <TouchableOpacity
+                                    style={[localStyles.toggleBtn, travelMode === 'driving' && localStyles.toggleBtnActive]}
+                                    onPress={() => setTravelMode('driving')}
+                                >
+                                    <Text style={[localStyles.toggleText, travelMode === 'driving' && localStyles.toggleTextActive]}>
+                                        🚗 Car (Road)
+                                    </Text>
+                                </TouchableOpacity>
+
+                                <TouchableOpacity
+                                    style={[localStyles.toggleBtn, travelMode === 'aerial' && localStyles.toggleBtnActive]}
+                                    onPress={() => setTravelMode('aerial')}
+                                >
+                                    <Text style={[localStyles.toggleText, travelMode === 'aerial' && localStyles.toggleTextActive]}>
+                                        ✈️ Flight/Train
+                                    </Text>
+                                </TouchableOpacity>
                             </View>
 
                             <View style={localStyles.divider} />
