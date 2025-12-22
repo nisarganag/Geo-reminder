@@ -23,4 +23,5 @@ export interface ReminderSettings {
   isActive: boolean;
   soundEnabled: boolean;
   vibrationEnabled: boolean;
+  history?: SearchResult[];
 }

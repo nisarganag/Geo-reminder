@@ -60,6 +60,8 @@ export default function HomeScreen() {
     const [statusMessage, setStatusMessage] = useState('Ready to start');
     const [initialDistance, setInitialDistance] = useState<number | null>(null);
     const [isAlarmActive, setIsAlarmActive] = useState(false);
+    const [searchHistory, setSearchHistory] = useState<SearchResult[]>([]);
+    const [snoozeUntil, setSnoozeUntil] = useState<number>(0);
 
     const locationSubscription = useRef<any>(null);
     const lastNotificationTime = useRef<number>(0);
@@ -137,8 +139,14 @@ export default function HomeScreen() {
         try {
             const saved = await AsyncStorage.getItem(STORAGE_KEY);
             if (saved) {
-                const settings: ReminderSettings & { isDark?: boolean } = JSON.parse(saved);
+                const settings: ReminderSettings & { isDark?: boolean, history?: SearchResult[] } = JSON.parse(saved);
+
                 if (settings.isDark !== undefined) setIsDark(settings.isDark);
+                // HISTORY: Load search history
+                if (settings.history) setSearchHistory(settings.history);
+
+                // FIXED: Do NOT restore 'isActive' automatically if it was an alarm state.
+                // We only restore destination settings. User must explicitly 'Start' again.
                 if (settings.destination) {
                     setDestination(settings.destination);
                     setDestinationName(settings.destinationName);
@@ -160,10 +168,11 @@ export default function HomeScreen() {
                 destinationName,
                 distanceThreshold: parseFloat(distanceThreshold) * 1000,
                 timeThreshold: parseFloat(timeThreshold),
-                isActive: isTracking,
+                // isActive: isTracking, // DON'T SAVE TRACKING STATE. User wants fresh start on reload.
                 soundEnabled,
                 vibrationEnabled,
                 isDark,
+                history: searchHistory, // Save History
             };
             await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
         } catch (e) {
@@ -180,6 +189,11 @@ export default function HomeScreen() {
             longitude: parseFloat(item.lon)
         });
         setDestinationName(item.display_name);
+
+        // Add to History (Deduped, Max 5)
+        const newHistory = [item, ...searchHistory.filter(h => h.display_name !== item.display_name)].slice(0, 5);
+        setSearchHistory(newHistory);
+
         setSearchResults([]);
         setQuery('');
     };
@@ -293,12 +307,23 @@ export default function HomeScreen() {
     const stopAlarm = async () => {
         await AlarmService.stopAlarm();
         setIsAlarmActive(false);
-        setIsTracking(false); // Optionally stop tracking or let them continue? usually stop.
+        setIsTracking(false);
         setStatusMessage('Arrived');
+        clearSelection(); // REQUESTED: Clear destination on stop
+    };
+
+    const snoozeAlarm = async (minutes: number) => {
+        await AlarmService.stopAlarm();
+        setIsAlarmActive(false);
+        // Snooze logic: Don't check proximity until Now + Min
+        setSnoozeUntil(Date.now() + (minutes * 60 * 1000));
+        // Keep tracking active!
+        setStatusMessage(`Snoozed for ${minutes} min`);
     };
 
     const checkProximity = async (userCoords: LocationCoords) => {
         if (!destination) return;
+        if (Date.now() < snoozeUntil) return; // Respect Snooze
 
         let info: RouteInfo | null = null;
         const now = Date.now();
@@ -397,9 +422,22 @@ export default function HomeScreen() {
 
                     <TouchableOpacity
                         onPress={stopAlarm}
-                        style={{ backgroundColor: '#FFF', paddingVertical: 24, paddingHorizontal: 48, borderRadius: 40, elevation: 10, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 20, shadowOffset: { width: 0, height: 10 } }}>
+                        style={{ backgroundColor: '#FFF', paddingVertical: 24, paddingHorizontal: 48, borderRadius: 40, elevation: 10, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 20, shadowOffset: { width: 0, height: 10 }, marginBottom: 30 }}>
                         <Text style={{ fontSize: 24, fontWeight: '900', color: '#FF3B30', letterSpacing: 1 }}>STOP ALARM</Text>
                     </TouchableOpacity>
+
+                    {/* SNOOZE BUTTONS */}
+                    <Text style={{ color: 'rgba(255,255,255,0.9)', fontWeight: '700', marginBottom: 16 }}>SNOOZE FOR...</Text>
+                    <View style={{ flexDirection: 'row', gap: 16 }}>
+                        {[3, 5, 10].map(m => (
+                            <TouchableOpacity
+                                key={m}
+                                onPress={() => snoozeAlarm(m)}
+                                style={{ backgroundColor: 'rgba(255,255,255,0.3)', paddingVertical: 12, paddingHorizontal: 20, borderRadius: 20 }}>
+                                <Text style={{ color: '#FFF', fontWeight: '800' }}>{m}m</Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
                 </View>
             )}
 
@@ -503,6 +541,27 @@ export default function HomeScreen() {
                                 </View>
                             )}
 
+                            {/* HISTORY DROPDOWN (When focused but no query) */}
+                            {!query && searchHistory.length > 0 && !destination && (
+                                <View style={{ marginTop: 16 }}>
+                                    <Text style={styles.cardTitle}>RECENT</Text>
+                                    <ScrollView style={{ maxHeight: 200 }} keyboardShouldPersistTaps="handled">
+                                        {searchHistory.map((item, index) => (
+                                            <TouchableOpacity
+                                                key={`hist-${index}`}
+                                                onPress={() => selectDestination(item)}
+                                                style={[styles.dropdownItem, { paddingLeft: 0, borderBottomWidth: 0.5 }]}
+                                            >
+                                                <View style={[styles.iconContainer, { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border }]}>
+                                                    <Text>🕒</Text>
+                                                </View>
+                                                <Text style={styles.resultText} numberOfLines={1}>{item.display_name}</Text>
+                                            </TouchableOpacity>
+                                        ))}
+                                    </ScrollView>
+                                </View>
+                            )}
+
                             {destination && !query && (
                                 <View style={styles.selectedContainer}>
                                     <View>
@@ -559,7 +618,7 @@ export default function HomeScreen() {
                                     onPress={() => setTravelMode('driving')}
                                 >
                                     <Text style={[styles.toggleText, travelMode === 'driving' && styles.toggleTextActive]}>
-                                        🚗 Car (Road)
+                                        🚗 Car/Train (Road)
                                     </Text>
                                 </TouchableOpacity>
 
@@ -568,7 +627,7 @@ export default function HomeScreen() {
                                     onPress={() => setTravelMode('aerial')}
                                 >
                                     <Text style={[styles.toggleText, travelMode === 'aerial' && styles.toggleTextActive]}>
-                                        ✈️ Flight/Train
+                                        ✈️ Flight
                                     </Text>
                                 </TouchableOpacity>
                             </View>
@@ -641,7 +700,7 @@ export default function HomeScreen() {
                     </View>
                 )}
             </ScrollView>
-        </SafeAreaView>
+        </SafeAreaView >
     );
 }
 
