@@ -20,6 +20,7 @@ export default function Sidebar({
 }: SidebarProps) {
     const colors = isDark ? DarkColors : LightColors;
     const [isChecking, setIsChecking] = useState(false);
+    const [isDownloading, setIsDownloading] = useState(false);
 
     const handleCheckUpdate = async () => {
         setIsChecking(true);
@@ -32,7 +33,17 @@ export default function Sidebar({
                 `A new version (${latestVersion}) is available. Download and install?`,
                 [
                     { text: 'Cancel', style: 'cancel' },
-                    { text: 'Download', onPress: () => UpdateService.downloadAndInstall(downloadUrl) }
+                    {
+                        text: 'Download',
+                        onPress: async () => {
+                            try {
+                                setIsDownloading(true);
+                                await UpdateService.downloadAndInstall(downloadUrl);
+                            } finally {
+                                setIsDownloading(false);
+                            }
+                        }
+                    }
                 ]
             );
         } else {
@@ -53,7 +64,16 @@ export default function Sidebar({
                         </TouchableOpacity>
                     </View>
 
-                    <ScrollView style={styles.content}>
+                    {/* DOWNLOADING OVERLAY */}
+                    {isDownloading && (
+                        <View style={{ padding: 20, alignItems: 'center', backgroundColor: colors.inputBg, margin: 20, borderRadius: 16 }}>
+                            <ActivityIndicator size="large" color={colors.primary} />
+                            <Text style={{ marginTop: 12, fontWeight: '700', color: colors.text }}>Downloading Update...</Text>
+                            <Text style={{ fontSize: 12, color: colors.textSecondary }}>Please wait, this may take a moment.</Text>
+                        </View>
+                    )}
+
+                    <ScrollView style={[styles.content, isDownloading && { opacity: 0.5 }]} pointerEvents={isDownloading ? 'none' : 'auto'}>
                         {/* APPEARANCE */}
                         <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>APPEARANCE</Text>
                         <View style={[styles.row, { borderBottomColor: colors.border }]}>
