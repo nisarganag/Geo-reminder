@@ -39,6 +39,13 @@ jobs:
         env:
           NODE_OPTIONS: "--max-old-space-size=4096 --openssl-legacy-provider"
 
+      - name: Upload Gradle Build Reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gradle-build-reports
+          path: android/build/reports/
+
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
