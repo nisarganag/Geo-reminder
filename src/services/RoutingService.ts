@@ -46,38 +46,55 @@ export const RoutingService = {
     userCoords?: LocationCoords
   ): Promise<SearchResult[]> => {
     try {
-      // GOOGLE GEOCODING API
-      let url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(
+      // GOOGLE PLACES AUTOCOMPLETE API
+      // Use 'input' for partial matching and 'types' to allow establishments (businesses) + geocode (addresses)
+      let url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(
         query
       )}&key=${GOOGLE_API_KEY}`;
 
-      // BIASING: Construct a Bounding Box (~50km radius) around the user if location is known
-      // This solves the "Salt Lake" vs "Salt Lake City" issue by prioritizing local results.
+      // BIASING: Focus results around the user's location
       if (userCoords) {
-        const delta = 0.5; // Roughly 55km latitude
-        const south = userCoords.latitude - delta;
-        const north = userCoords.latitude + delta;
-        const west = userCoords.longitude - delta;
-        const east = userCoords.longitude + delta;
-
-        url += `&bounds=${south},${west}|${north},${east}`;
+        // location=lat,lng&radius=50000 (50km)
+        url += `&location=${userCoords.latitude},${userCoords.longitude}&radius=50000`;
       }
 
       const response = await fetch(url);
       const data = await response.json();
 
-      if (data.status === "OK" && data.results) {
-        return data.results.map((r: any) => ({
-          display_name: r.formatted_address,
-          lat: r.geometry.location.lat.toString(),
-          lon: r.geometry.location.lng.toString(),
-          importance: 1.0, // Google results are high confidence
+      if (data.status === "OK" && data.predictions) {
+        return data.predictions.map((p: any) => ({
+          display_name: p.description,
+          lat: "0", // Placeholder, fetched on selection via getPlaceDetails
+          lon: "0",
+          place_id: p.place_id,
         }));
       }
       return [];
     } catch (error) {
       console.error("Error searching location:", error);
       return [];
+    }
+  },
+
+  getPlaceDetails: async (placeId: string): Promise<LocationCoords | null> => {
+    try {
+      // GOOGLE PLACES DETAILS API
+      // Only fetch geometry to save data/cost
+      const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=geometry&key=${GOOGLE_API_KEY}`;
+
+      const response = await fetch(url);
+      const data = await response.json();
+
+      if (data.status === "OK" && data.result && data.result.geometry) {
+        return {
+          latitude: data.result.geometry.location.lat,
+          longitude: data.result.geometry.location.lng,
+        };
+      }
+      return null;
+    } catch (error) {
+      console.error("Error getting place details:", error);
+      return null;
     }
   },
 

@@ -7,6 +7,7 @@ export interface SearchResult {
   display_name: string;
   lat: string;
   lon: string;
+  place_id?: string; // For Google Places API
 }
 
 export interface RouteInfo {

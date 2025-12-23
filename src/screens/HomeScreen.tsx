@@ -245,15 +245,32 @@ export default function HomeScreen() {
     // Auto save theme when changed
     useEffect(() => { saveSettings(); }, [isDark, soundEnabled, vibrationEnabled]);
 
-    const selectDestination = (item: SearchResult) => {
+    const selectDestination = async (item: SearchResult) => {
+        let lat = parseFloat(item.lat);
+        let lon = parseFloat(item.lon);
+
+        // If it's a Google Place with pending coords
+        if (item.place_id && (lat === 0 || lon === 0)) {
+            const details = await RoutingService.getPlaceDetails(item.place_id);
+            if (details) {
+                lat = details.latitude;
+                lon = details.longitude;
+            } else {
+                Alert.alert("Error", "Could not fetch details for this location.");
+                return;
+            }
+        }
+
         setDestination({
-            latitude: parseFloat(item.lat),
-            longitude: parseFloat(item.lon)
+            latitude: lat,
+            longitude: lon
         });
         setDestinationName(item.display_name);
 
         // Add to History (Deduped, Max 5)
-        const newHistory = [item, ...searchHistory.filter(h => h.display_name !== item.display_name)].slice(0, 5);
+        // Store the resolved lat/lon in history to avoid re-fetching details
+        const historyItem = { ...item, lat: lat.toString(), lon: lon.toString() };
+        const newHistory = [historyItem, ...searchHistory.filter(h => h.display_name !== item.display_name)].slice(0, 5);
         setSearchHistory(newHistory);
 
         setSearchResults([]);
