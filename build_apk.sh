@@ -75,10 +75,10 @@ echo "sdk.dir=$SDK_DIR" > android/local.properties
 echo "🚀 Starting Prebuild..."
 npx expo prebuild --platform android --clean
 
-echo "📦 Building APK with Gradle (RELEASE mode for smaller size)..."
+echo "📦 Building APK with Gradle..."
 cd android
 chmod +x gradlew
-./gradlew assembleRelease
+./gradlew assembleDebug
 
 echo "✅ Build Attempt Completed."
-echo "If successful, APK is at: android/app/build/outputs/apk/release/app-release.apk"
+echo "If successful, APK is at: android/app/build/outputs/apk/debug/app-debug.apk"
