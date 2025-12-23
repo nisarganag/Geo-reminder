@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, Modal, TouchableOpacity, StyleSheet, ScrollView, Alert } from 'react-native';
+import { View, Text, Modal, TouchableOpacity, StyleSheet, ScrollView, Alert, SafeAreaView, Platform } from 'react-native';
 import { FavoriteLocation, LocationCoords } from '../types';
 import { LightColors, DarkColors } from '../theme';
 import { Ionicons } from '@expo/vector-icons';
@@ -42,7 +42,7 @@ export const FavoritesManager = ({ isVisible, onClose, favorites, onSelect, onDe
             presentationStyle="pageSheet"
             onRequestClose={onClose}
         >
-            <View style={[styles.container, { backgroundColor: isDark ? '#000' : '#F2F2F7' }]}>
+            <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#000' : '#F2F2F7' }]}>
                 {/* Header */}
                 <View style={[styles.header, { backgroundColor: isDark ? '#1C1C1E' : 'white' }]}>
                     <Text style={[styles.title, { color: colors.text }]}>My Places</Text>
@@ -109,7 +109,7 @@ export const FavoritesManager = ({ isVisible, onClose, favorites, onSelect, onDe
                     <View style={{ height: 40 }} />
                 </ScrollView>
 
-            </View>
+            </SafeAreaView>
         </Modal>
     );
 };
@@ -122,7 +122,8 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'center',
         alignItems: 'center',
-        paddingVertical: 16,
+        paddingBottom: 16,
+        paddingTop: Platform.OS === 'android' ? 40 : 16,
         paddingHorizontal: 16,
         borderBottomWidth: 0.5,
         borderBottomColor: '#ccc',
