@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Switch, Modal, SafeAreaView, ScrollView, Platform, Alert, ActivityIndicator } from 'react-native';
+import React, { useState, useRef, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Switch, Modal, SafeAreaView, ScrollView, Platform, Alert, ActivityIndicator, Animated, Dimensions, Easing } from 'react-native';
 import { LightColors, DarkColors } from '../theme';
 import { UpdateService } from '../services/UpdateService';
 
@@ -17,6 +17,9 @@ interface SidebarProps {
     onManageFavorites?: () => void;
 }
 
+const { width } = Dimensions.get('window');
+const SIDEBAR_WIDTH = Math.min(width * 0.8, 320);
+
 export default function Sidebar({
     isVisible, onClose, isDark, toggleTheme,
     soundEnabled, toggleSound, vibrationEnabled, toggleVibration,
@@ -25,6 +28,48 @@ export default function Sidebar({
     const colors = isDark ? DarkColors : LightColors;
     const [isChecking, setIsChecking] = useState(false);
     const [isDownloading, setIsDownloading] = useState(false);
+
+    // Animations
+    const slideAnim = useRef(new Animated.Value(-SIDEBAR_WIDTH)).current;
+    const fadeAnim = useRef(new Animated.Value(0)).current;
+
+    useEffect(() => {
+        if (isVisible) {
+            // OPEN Animation
+            Animated.parallel([
+                Animated.timing(slideAnim, {
+                    toValue: 0,
+                    duration: 300,
+                    useNativeDriver: true,
+                    easing: Easing.out(Easing.poly(4))
+                }),
+                Animated.timing(fadeAnim, {
+                    toValue: 1,
+                    duration: 300,
+                    useNativeDriver: true
+                })
+            ]).start();
+        }
+    }, [isVisible]);
+
+    const handleClose = () => {
+        // CLOSE Animation
+        Animated.parallel([
+            Animated.timing(slideAnim, {
+                toValue: -SIDEBAR_WIDTH,
+                duration: 250,
+                useNativeDriver: true,
+                easing: Easing.in(Easing.poly(4))
+            }),
+            Animated.timing(fadeAnim, {
+                toValue: 0,
+                duration: 250,
+                useNativeDriver: true
+            })
+        ]).start(() => {
+            onClose(); // Unmount after animation
+        });
+    };
 
     const handleCheckUpdate = async () => {
         setIsChecking(true);
@@ -56,113 +101,132 @@ export default function Sidebar({
     };
 
     return (
-        <Modal visible={isVisible} animationType="fade" transparent>
+        <Modal visible={isVisible} animationType="none" transparent onRequestClose={handleClose}>
             <View style={styles.overlay}>
-                <TouchableOpacity style={styles.backdrop} onPress={onClose} activeOpacity={1} />
+                {/* BACKDROP */}
+                <Animated.View
+                    style={[
+                        styles.backdrop,
+                        { opacity: fadeAnim }
+                    ]}
+                >
+                    <TouchableOpacity style={{ flex: 1 }} onPress={handleClose} activeOpacity={1} />
+                </Animated.View>
 
-                <SafeAreaView style={[styles.sidebar, { backgroundColor: colors.card }]}>
-                    <View style={styles.header}>
-                        <Text style={[styles.title, { color: colors.text }]}>Settings</Text>
-                        <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-                            <Text style={{ fontSize: 20, color: colors.textSecondary }}>✕</Text>
-                        </TouchableOpacity>
-                    </View>
-
-                    {/* DOWNLOADING OVERLAY */}
-                    {isDownloading && (
-                        <View style={{ padding: 20, alignItems: 'center', backgroundColor: colors.inputBg, margin: 20, borderRadius: 16 }}>
-                            <ActivityIndicator size="large" color={colors.primary} />
-                            <Text style={{ marginTop: 12, fontWeight: '700', color: colors.text }}>Downloading Update...</Text>
-                            <Text style={{ fontSize: 12, color: colors.textSecondary }}>Please wait, this may take a moment.</Text>
-                        </View>
-                    )}
-
-                    <ScrollView style={[styles.content, isDownloading && { opacity: 0.5 }]} pointerEvents={isDownloading ? 'none' : 'auto'}>
-                        {/* APPEARANCE */}
-                        <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>APPEARANCE</Text>
-                        <View style={[styles.row, { borderBottomColor: colors.border }]}>
-                            <Text style={[styles.label, { color: colors.text }]}>Dark Mode</Text>
-                            <Switch
-                                value={isDark}
-                                onValueChange={toggleTheme}
-                                trackColor={{ false: '#767577', true: colors.primary }}
-                            />
+                {/* SIDEBAR PANEL */}
+                <Animated.View
+                    style={[
+                        styles.sidebar,
+                        {
+                            backgroundColor: colors.card,
+                            transform: [{ translateX: slideAnim }]
+                        }
+                    ]}
+                >
+                    <SafeAreaView style={{ flex: 1 }}>
+                        <View style={styles.header}>
+                            <Text style={[styles.title, { color: colors.text }]}>Settings</Text>
+                            <TouchableOpacity onPress={handleClose} style={styles.closeBtn}>
+                                <Text style={{ fontSize: 20, color: colors.textSecondary }}>✕</Text>
+                            </TouchableOpacity>
                         </View>
 
-                        {/* ALERTS */}
-                        <Text style={[styles.sectionTitle, { color: colors.textSecondary, marginTop: 24 }]}>ALERTS</Text>
-                        <View style={[styles.row, { borderBottomColor: colors.border }]}>
-                            <Text style={[styles.label, { color: colors.text }]}>Sound</Text>
-                            <Switch
-                                value={soundEnabled}
-                                onValueChange={toggleSound}
-                                trackColor={{ false: '#767577', true: colors.primary }}
-                            />
-                        </View>
-                        <View style={[styles.row, { borderBottomColor: colors.border, borderBottomWidth: 0 }]}>
-                            <Text style={[styles.label, { color: colors.text }]}>Vibration</Text>
-                            <Switch
-                                value={vibrationEnabled}
-                                onValueChange={toggleVibration}
-                                trackColor={{ false: '#767577', true: colors.primary }}
-                            />
-                        </View>
-
-                        {/* CUSTOM SOUND */}
-                        <TouchableOpacity
-                            style={[styles.row, { borderBottomWidth: 0, marginTop: 8 }]}
-                            onPress={onPickSound}
-                        >
-                            <View>
-                                <Text style={[styles.label, { color: colors.text }]}>Alarm Sound</Text>
-                                <Text style={{ fontSize: 12, color: colors.textSecondary }}>
-                                    {customSoundName || 'Default Siren'}
-                                </Text>
+                        {/* DOWNLOADING OVERLAY */}
+                        {isDownloading && (
+                            <View style={{ padding: 20, alignItems: 'center', backgroundColor: colors.inputBg, margin: 20, borderRadius: 16 }}>
+                                <ActivityIndicator size="large" color={colors.primary} />
+                                <Text style={{ marginTop: 12, fontWeight: '700', color: colors.text }}>Downloading Update...</Text>
+                                <Text style={{ fontSize: 12, color: colors.textSecondary }}>Please wait, this may take a moment.</Text>
                             </View>
-                            <Text style={{ color: colors.primary, fontWeight: '600' }}>EDIT</Text>
-                        </TouchableOpacity>
+                        )}
 
-                        {/* MANAGE FAVORITES - NEW */}
-                        <TouchableOpacity
-                            style={[styles.row, { borderBottomWidth: 0, marginTop: 8 }]}
-                            onPress={onManageFavorites}
-                        >
-                            <View>
-                                <Text style={[styles.label, { color: colors.text }]}>Manage Favorites</Text>
-                                <Text style={{ fontSize: 12, color: colors.textSecondary }}>
-                                    View and edit your saved places
-                                </Text>
+                        <ScrollView style={[styles.content, isDownloading && { opacity: 0.5 }]} pointerEvents={isDownloading ? 'none' : 'auto'}>
+                            {/* APPEARANCE */}
+                            <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>APPEARANCE</Text>
+                            <View style={[styles.row, { borderBottomColor: colors.border }]}>
+                                <Text style={[styles.label, { color: colors.text }]}>Dark Mode</Text>
+                                <Switch
+                                    value={isDark}
+                                    onValueChange={toggleTheme}
+                                    trackColor={{ false: '#767577', true: colors.primary }}
+                                />
                             </View>
-                            <Text style={{ fontSize: 24 }}>❤️</Text>
-                        </TouchableOpacity>
 
-                        {/* ABOUT */}
-                        <Text style={[styles.sectionTitle, { color: colors.textSecondary, marginTop: 24 }]}>ABOUT</Text>
-                        <View style={styles.aboutContainer}>
-                            <Text style={[styles.aboutText, { color: colors.text }]}>Geo Reminder</Text>
-                            <Text style={[styles.aboutSub, { color: colors.textSecondary }]}>Version 1.0.2</Text>
+                            {/* ALERTS */}
+                            <Text style={[styles.sectionTitle, { color: colors.textSecondary, marginTop: 24 }]}>ALERTS</Text>
+                            <View style={[styles.row, { borderBottomColor: colors.border }]}>
+                                <Text style={[styles.label, { color: colors.text }]}>Sound</Text>
+                                <Switch
+                                    value={soundEnabled}
+                                    onValueChange={toggleSound}
+                                    trackColor={{ false: '#767577', true: colors.primary }}
+                                />
+                            </View>
+                            <View style={[styles.row, { borderBottomColor: colors.border, borderBottomWidth: 0 }]}>
+                                <Text style={[styles.label, { color: colors.text }]}>Vibration</Text>
+                                <Switch
+                                    value={vibrationEnabled}
+                                    onValueChange={toggleVibration}
+                                    trackColor={{ false: '#767577', true: colors.primary }}
+                                />
+                            </View>
 
+                            {/* CUSTOM SOUND */}
                             <TouchableOpacity
-                                style={[styles.updateBtn, { backgroundColor: colors.inputBg }]}
-                                onPress={handleCheckUpdate}
-                                disabled={isChecking}
+                                style={[styles.row, { borderBottomWidth: 0, marginTop: 8 }]}
+                                onPress={onPickSound}
                             >
-                                {isChecking ? (
-                                    <ActivityIndicator size="small" color={colors.primary} />
-                                ) : (
-                                    <Text style={{ color: colors.primary, fontWeight: '600' }}>Check for Updates</Text>
-                                )}
+                                <View>
+                                    <Text style={[styles.label, { color: colors.text }]}>Alarm Sound</Text>
+                                    <Text style={{ fontSize: 12, color: colors.textSecondary }}>
+                                        {customSoundName || 'Default Siren'}
+                                    </Text>
+                                </View>
+                                <Text style={{ color: colors.primary, fontWeight: '600' }}>EDIT</Text>
                             </TouchableOpacity>
 
-                            <Text style={[styles.aboutSub, { color: colors.textSecondary, marginTop: 16 }]}>
-                                Made with ❤️ by Nisarga.
-                            </Text>
-                        </View>
+                            {/* MANAGE FAVORITES - NEW */}
+                            <TouchableOpacity
+                                style={[styles.row, { borderBottomWidth: 0, marginTop: 8 }]}
+                                onPress={onManageFavorites}
+                            >
+                                <View>
+                                    <Text style={[styles.label, { color: colors.text }]}>Manage Favorites</Text>
+                                    <Text style={{ fontSize: 12, color: colors.textSecondary }}>
+                                        View and edit your saved places
+                                    </Text>
+                                </View>
+                                <Text style={{ fontSize: 24 }}>❤️</Text>
+                            </TouchableOpacity>
 
-                    </ScrollView>
-                </SafeAreaView >
-            </View >
-        </Modal >
+                            {/* ABOUT */}
+                            <Text style={[styles.sectionTitle, { color: colors.textSecondary, marginTop: 24 }]}>ABOUT</Text>
+                            <View style={styles.aboutContainer}>
+                                <Text style={[styles.aboutText, { color: colors.text }]}>Geo Reminder</Text>
+                                <Text style={[styles.aboutSub, { color: colors.textSecondary }]}>Version 1.0.2</Text>
+
+                                <TouchableOpacity
+                                    style={[styles.updateBtn, { backgroundColor: colors.inputBg }]}
+                                    onPress={handleCheckUpdate}
+                                    disabled={isChecking}
+                                >
+                                    {isChecking ? (
+                                        <ActivityIndicator size="small" color={colors.primary} />
+                                    ) : (
+                                        <Text style={{ color: colors.primary, fontWeight: '600' }}>Check for Updates</Text>
+                                    )}
+                                </TouchableOpacity>
+
+                                <Text style={[styles.aboutSub, { color: colors.textSecondary, marginTop: 16 }]}>
+                                    Made with ❤️ by Nisarga.
+                                </Text>
+                            </View>
+
+                        </ScrollView>
+                    </SafeAreaView>
+                </Animated.View>
+            </View>
+        </Modal>
     );
 }
 
