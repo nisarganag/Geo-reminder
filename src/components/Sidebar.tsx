@@ -30,7 +30,7 @@ export default function Sidebar({
     const [isDownloading, setIsDownloading] = useState(false);
 
     // Animations
-    const slideAnim = useRef(new Animated.Value(-SIDEBAR_WIDTH)).current;
+    const slideAnim = useRef(new Animated.Value(SIDEBAR_WIDTH)).current; // Start OFF-SCREEN RIGHT
     const fadeAnim = useRef(new Animated.Value(0)).current;
 
     useEffect(() => {
@@ -38,7 +38,7 @@ export default function Sidebar({
             // OPEN Animation
             Animated.parallel([
                 Animated.timing(slideAnim, {
-                    toValue: 0,
+                    toValue: 0, // Slide to visible (0)
                     duration: 300,
                     useNativeDriver: true,
                     easing: Easing.out(Easing.poly(4))
@@ -56,7 +56,7 @@ export default function Sidebar({
         // CLOSE Animation
         Animated.parallel([
             Animated.timing(slideAnim, {
-                toValue: -SIDEBAR_WIDTH,
+                toValue: SIDEBAR_WIDTH, // Slide back to OFF-SCREEN RIGHT
                 duration: 250,
                 useNativeDriver: true,
                 easing: Easing.in(Easing.poly(4))
@@ -233,11 +233,12 @@ export default function Sidebar({
 const styles = StyleSheet.create({
     overlay: {
         flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.5)',
+        // backgroundColor: 'rgba(0,0,0,0.5)', // Removed: Moved to backdrop for animation
         flexDirection: 'row',
     },
     backdrop: {
         flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.5)', // Added here to animate opacity
     },
     sidebar: {
         width: '80%',
