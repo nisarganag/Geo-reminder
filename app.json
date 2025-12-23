@@ -42,6 +42,6 @@
         "projectId": "b3746cfe-4e58-4b41-824e-c3ac1901d928"
       }
     },
-    "plugins": ["./with-signing.js"]
+    "plugins": ["./with-signing.js", "./with-android-minification.js"]
   }
 }
